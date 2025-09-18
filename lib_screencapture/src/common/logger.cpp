@@ -6,9 +6,9 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "logger.h"
 
-CallbackType dwalogger_callback=NULL;
+DWALoggerCallback dwalogger_callback=NULL;
 
-void DWALoggerSetCallback(CallbackType callback){
+void DWALoggerSetCallback(DWALoggerCallback callback){
 	dwalogger_callback=callback;
 }
 

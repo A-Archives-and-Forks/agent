@@ -3,7 +3,7 @@
  * (UCS, Unicode) values.
  */
 
-#if defined OS_LINUX
+#if defined OS_XORG
 
 #include <X11/X.h>
 

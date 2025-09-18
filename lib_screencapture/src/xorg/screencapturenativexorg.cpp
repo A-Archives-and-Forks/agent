@@ -85,10 +85,6 @@ int DWAScreenCaptureGetCpuUsage(){
     return (int)cpuUsage->getValue();
 }
 
-int DWAScreenCaptureVersion(){
-	return 2;
-}
-
 void DWAScreenCaptureFreeMemory(void* pnt){
 	free(pnt);
 }

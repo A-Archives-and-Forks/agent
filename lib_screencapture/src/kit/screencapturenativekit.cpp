@@ -3,9 +3,9 @@ This Source Code Form is subject to the terms of the Mozilla
 Public License, v. 2.0. If a copy of the MPL was not distributed
 with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
-#if defined OS_QUARZDISPLAY
+#if defined OS_SCREENCAPTUREKIT
 
-#include "screencapturenativequartzdisplay.h"
+#include "screencapturenativekit.h"
 
 int DWAScreenCaptureVersion(){
 	return 1;
@@ -16,17 +16,13 @@ void DWAScreenCaptureFreeMemory(void* pnt){
 }
 
 int DWAScreenCaptureIsChanged(){
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= 110000)
-	if (isMacOSVersionAtLeast11()){
-		if (!CGPreflightScreenCaptureAccess()) {
-			if (!reqperm){
-				reqperm=true;
-				CGRequestScreenCaptureAccess();
-			}
-			return 2;
+	if (!CGPreflightScreenCaptureAccess()) {
+		if (!reqperm){
+			reqperm=true;
+			CGRequestScreenCaptureAccess();
 		}
+		return 2;
 	}
-#endif
 	return 0;
 }
 
@@ -39,7 +35,7 @@ int DWAScreenCaptureInitMonitor(MONITORS_INFO_ITEM* moninfoitem, RGB_IMAGE* capi
 	sci->h=moninfoitem->height;
 	MonitorInternalInfo* mi = (MonitorInternalInfo*)moninfoitem->internal;
 	sci->displayID=mi->displayID;
-	int iret = DWAScreenCaptureDisplayStreamStartCapture(sci);
+	int iret = DWAScreenCaptureKitStartCapture(sci);
 	if (iret!=0){
 		return iret;
 	}
@@ -66,19 +62,17 @@ void DWAScreenCaptureTermMonitor(void* capses){
 	rgbimage->width=0;
 	rgbimage->height=0;
 	sci->status=0;
-	DWAScreenCaptureDisplayStreamStopCapture(sci);
+	DWAScreenCaptureKitStopCapture(sci);
 	delete sci;
 }
 
 int DWAScreenCaptureGetImage(void* capses){
+
 	ScreenCaptureInfo* sci = (ScreenCaptureInfo*)capses;
 	if (sci->status==0){
 		return -1; //NOT INIT
 	}
-	int iret=DWAScreenCaptureDisplayStreamGetImage(sci);
-	if (iret!=0){
-		return iret;
-	}
+	DWAScreenCaptureKitGetImage(sci);
 	sci->status=2;
 	return 0;
 }
@@ -229,6 +223,7 @@ void DWAScreenCapturePaste(){
 int DWAScreenCaptureGetClipboardText(wchar_t** wText){
 	usleep(200000);
 	return macobjcGetClipboardText(wText);
+	return 0;
 }
 
 void DWAScreenCaptureSetClipboardText(wchar_t* wText){
@@ -329,51 +324,19 @@ int DWAScreenCaptureGetMonitorsInfo(MONITORS_INFO* moninfo){
 				//wakeup monitor
 				if ((bwakeup==false) && (CGDisplayIsAsleep(dspy))){
 					bwakeup=true;
-					if (isMacOSVersionAtLeast12()){
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= 120000)
-						io_registry_entry_t reg = IORegistryEntryFromPath(kIOMainPortDefault, "IOService:/IOResources/IODisplayWrangler");
-						if (reg){
-							IORegistryEntrySetCFProperty(reg, CFSTR("IORequestIdle"), kCFBooleanFalse);
-						}
-						IOObjectRelease(reg);
+#if (MAC_OS_X_VERSION_MAX_ALLOWED < 120000)
+					#define kIOMainPortDefault kIOMasterPortDefault
 #endif
-					}else{
-						io_registry_entry_t reg = IORegistryEntryFromPath(kIOMasterPortDefault, "IOService:/IOResources/IODisplayWrangler");
-						if (reg){
-							IORegistryEntrySetCFProperty(reg, CFSTR("IORequestIdle"), kCFBooleanFalse);
-						}
-						IOObjectRelease(reg);
+					io_registry_entry_t reg = IORegistryEntryFromPath(kIOMainPortDefault, "IOService:/IOResources/IODisplayWrangler");
+					if (reg){
+						IORegistryEntrySetCFProperty(reg, CFSTR("IORequestIdle"), kCFBooleanFalse);
 					}
+					IOObjectRelease(reg);
 				}
 
 				CGDisplayModeRef dismode=CGDisplayCopyDisplayMode(dspy);
 				int modw = CGDisplayModeGetPixelWidth(dismode);
 				int modh = CGDisplayModeGetPixelHeight(dismode);
-
-				/*CGDisplayModeRelease(dismode);
-				CGImageRef imageref = CGDisplayCreateImage(dspy);
-				int imgw=modw;
-				int imgh=modh;
-				if (imageref!=NULL){
-					imgw=CGImageGetWidth(imageref);
-					imgh=CGImageGetHeight(imageref);
-					CGImageRelease(imageref);
-				}
-				CGRect r = CGDisplayBounds(dspy);
-				int ox=int(r.origin.x);
-				int oy=int(r.origin.y);
-				int sw=imgw;
-				int sh=imgh;
-				factx=1.0;
-				facty=1.0;
-				if ((imgw!=modw && modw>0) || (imgh!=modh && modh>0)){
-					factx=(float)imgw/(float)modw;
-					facty=(float)imgh/(float)modh;
-				}else{
-					factx=(float)imgw/(float)r.size.width;
-					facty=(float)imgh/(float)r.size.height;
-				}
-				*/
 
 				float factx=1.0;
 				float facty=1.0;
@@ -445,6 +408,7 @@ bool DWAScreenCaptureLoad(){
 	cpuUsage=new MacCPUUsage();
 	macInputs=new MacInputs();
 	curdef=false;
+	reqperm=false;
 	curoref=NULL;
 	curmoninfo=NULL;
 	CFStringRef reasonForActivity=CFSTR("dwagent keep awake");
@@ -452,12 +416,12 @@ bool DWAScreenCaptureLoad(){
 	successIOPM1 = IOPMAssertionCreateWithName(kIOPMAssertionTypeNoDisplaySleep, kIOPMAssertionLevelOn, reasonForActivity, &assertionIDIOPM1);
 	successIOPM2 = kIOReturnError;
 	successIOPM2 = IOPMAssertionCreateWithName(CFSTR("UserIsActive"), kIOPMAssertionLevelOn, reasonForActivity, &assertionIDIOPM2);
-	DWAScreenCaptureDisplayStreamLoad();
+	DWAScreenCaptureKitLoad();
 	return true;
 }
 
 void DWAScreenCaptureUnload(){
-	DWAScreenCaptureDisplayStreamUnload();
+	DWAScreenCaptureKitUnload();
 	delete cpuUsage;
 	delete macInputs;
 	if(successIOPM1 == kIOReturnSuccess) {

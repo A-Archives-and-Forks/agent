@@ -3,34 +3,52 @@ This Source Code Form is subject to the terms of the Mozilla
 Public License, v. 2.0. If a copy of the MPL was not distributed
 with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
-#if defined OS_QUARZDISPLAY
+#ifndef EXTERN_V3_H_
+#define EXTERN_V3_H_
 
-#include <sys/shm.h>
-#include <stdio.h>
-#include <string.h>
-#include <sstream>
-#include <stdlib.h>
-#include <map>
-#include <vector>
-#include "../common/timecounter.h"
-#include "../common/logger.h"
 #include "../common/util.h"
-#include "../mac/maccpuusage.h"
-#include "../mac/macinputs.h"
-#include "../mac/macobjc.h"
-#include <ApplicationServices/ApplicationServices.h>
-#include <Carbon/Carbon.h>
-#include <IOKit/IOKitLib.h>
-#include <IOKit/pwr_mgt/IOPMLib.h>
-#include <mach/mach_init.h>
-#include <mach/mach_error.h>
-#include "screencapturenativequartzdisplayobjc.h"
+
+/*
+DIFFERENCE FROM V2:
+
+CHANGED
+DWAScreenCaptureIsChanged() can return 3 = PERMISSION TOKEN; 4 = ERROR
+
+ADDED
+DWAScreenCaptureGetPermissionToken() message for DWAScreenCaptureIsChanged=3
+DWAScreenCaptureSetPermissionToken()
+DWAScreenCaptureErrorMessage() message for DWAScreenCaptureIsChanged=4
+*/
+
+/*
+typedef void (*DWAScreenCaptureOnMonitorsCallback)(MONITORS_INFO* moninfo);
+DWAScreenCaptureOnMonitorsCallback dwaScreenCaptureOnMonitorsCallback=NULL;
+
+typedef void (*DWAScreenCaptureOnRGBFrameCallback)(int idxmon, RGB_IMAGE* capimage);
+DWAScreenCaptureOnRGBFrameCallback dwaScreenCaptureOnRGBFrameCallback=NULL;
+*/
 
 extern "C" {
-	int DWAScreenCaptureVersion();
+	int DWAScreenCaptureVersion(){
+		return 3;
+	}
+
+	/*
+	void DWAScreenCaptureSetOnMonitorsCallback(DWAScreenCaptureOnMonitorsCallback callback){
+		dwaScreenCaptureOnMonitorsCallback=callback;
+	}
+
+	void DWAScreenCaptureSetOnRGBFrameCallback(DWAScreenCaptureOnRGBFrameCallback callback){
+		dwaScreenCaptureOnRGBFrameCallback=callback;
+	}
+	*/
+
 	bool DWAScreenCaptureLoad();
 	void DWAScreenCaptureFreeMemory(void* pnt);
 	int DWAScreenCaptureIsChanged();
+	int DWAScreenCaptureErrorMessage(char* bf, int sz);
+	int DWAScreenCaptureGetPermissionToken(char* bf, int sz);
+	void DWAScreenCaptureSetPermissionToken(char* bf, int sz);
 	int DWAScreenCaptureGetMonitorsInfo(MONITORS_INFO* moninfo);
 	int DWAScreenCaptureInitMonitor(MONITORS_INFO_ITEM* moninfoitem, RGB_IMAGE* capimage, void** capses);
 	int DWAScreenCaptureGetImage(void* capses);
@@ -39,44 +57,11 @@ extern "C" {
 	void DWAScreenCaptureInputKeyboard(const char* type, const char* key, bool ctrl, bool alt, bool shift, bool command);
 	void DWAScreenCaptureInputMouse(MONITORS_INFO_ITEM* moninfoitem, int x, int y, int button, int wheel, bool ctrl, bool alt, bool shift, bool command);
 	int DWAScreenCaptureCursor(CURSOR_IMAGE* curimage);
-
-	int DWAScreenCaptureGetClipboardText(wchar_t** wText);
-	void DWAScreenCaptureSetClipboardText(wchar_t* wText);
-
-	//// TO DO 30/09/22 REMOVE ClipboardText
 	void DWAScreenCaptureGetClipboardChanges(CLIPBOARD_DATA* clipboardData);
 	void DWAScreenCaptureSetClipboard(CLIPBOARD_DATA* clipboardData);
-	//////////////////////////////////////////
-
 	void DWAScreenCaptureCopy();
 	void DWAScreenCapturePaste();
 	int DWAScreenCaptureGetCpuUsage();
 }
 
-#define MONITORS_MAX 32
-
-struct MonitorInternalInfo{
-	CGDirectDisplayID displayID;
-	int x;
-	int y;
-	int w;
-	int h;
-	float factx;
-	float facty;
-};
-MONITORS_INFO* curmoninfo;
-
-MacCPUUsage* cpuUsage;
-MacInputs* macInputs;
-bool curdef;
-void* curoref;
-
-bool reqperm;
-
-IOPMAssertionID assertionIDIOPM1;
-IOReturn successIOPM1;
-IOPMAssertionID assertionIDIOPM2;
-IOReturn successIOPM2;
-
-
-#endif
+#endif /* EXTERN_V3_H_ */

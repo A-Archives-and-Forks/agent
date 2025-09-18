@@ -6,10 +6,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #if defined OS_MAC
 
 #include "../common/timecounter.h"
-#include <iostream>
-#include <mach/mach.h>
-#include <mach/mach_time.h>
-#include <sys/sysctl.h>
+#include <mach/mach_host.h>
 
 #ifndef MACCPUUSAGE_H_
 #define MACCPUUSAGE_H_
@@ -24,9 +21,8 @@ public:
 private:
     float calculateCPULoad(unsigned long long idleTicks, unsigned long long totalTicks);
 
-  	bool firstGetCpu;
-  	uint64_t prevTime;
-	uint64_t cpuFrequency;
+    unsigned long long previousTotalTicks;
+    unsigned long long previousIdleTicks;
     double percentCpu;
     TimeCounter cpuCounter;
 

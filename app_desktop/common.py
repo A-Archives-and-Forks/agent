@@ -7,39 +7,33 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 '''
 import ctypes
 
+
+#2024-10-04 Fix Apple ScreenCapture Kit
+_tmpval={}
+import subprocess
+import sys
+
+def get_mac_version():
+    try:
+        if "ver" not in _tmpval:
+            o = subprocess.check_output(["sw_vers", "-productVersion"]).strip()
+            if sys.version_info[0] >= 3:
+                o = o.decode("utf-8")
+            aro=o.split(".")
+            i=aro[0]
+            d="0"
+            if len(aro)>1:
+                d=aro[1]
+            o=i+"."+d
+            _tmpval["ver"] = float(o)
+    except:
+        _tmpval["ver"] = float(0)
+    return _tmpval["ver"]
+####################
+
 _libmap={}
 _libmap["lastID"]=0
 _libmap["capscrID"]=0
-
-#CALLBACKS
-SCRLOGWRTFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p)
-SCRENCRESFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char))
-SNDDATAFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_char))
-SNDENCRESFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char))
-
-@SCRLOGWRTFUNC
-def cb_write_log(i,s):
-    f = _libmap["cb_write_log"]
-    if f is not None:
-        f(i,s)
-
-
-func_screen_encode_result=None
-@SCRENCRESFUNC
-def cb_screen_encode_result(sz, pdata):
-    func_screen_encode_result(sz, pdata)
-    
-@SNDDATAFUNC
-def cb_sound_data(sz, pdata):
-    f = _libmap["cb_sound_data"]
-    if f is not None:
-        f(sz, pdata)
-
-func_sound_encode_result=None
-@SNDENCRESFUNC
-def cb_sound_encode_result(sz, pdata):
-    func_sound_encode_result(sz, pdata)    
-
 
 TOKEN_RESOLUTION=0 #DATA=W-H 
 TOKEN_FRAME=2 #DATA=L-X-Y-W-H-IMG - L=End frame (1:YES 0:NO)
@@ -63,8 +57,6 @@ TOKEN_SESSION_STATS=991
 VK_SHIFT          = 0x10
 VK_CONTROL        = 0x11
 VK_ALT            = 0x12
-
-
 
 TYPE_FRAME_PALETTE_V1 =  0
 TYPE_FRAME_TJPEG_V1 = 100
@@ -136,3 +128,39 @@ class CLIPBOARD_DATA(ctypes.Structure):
     _fields_ = [("type",ctypes.c_uint),
                 ("sizedata",ctypes.c_long),
                 ("data", ctypes.c_void_p)]
+
+
+#CALLBACKS
+SCRLOGWRTFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p)
+SCRENCRESFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char))
+SNDDATAFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_char))
+SNDENCRESFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(ctypes.c_char))
+
+#SCRONMONITORSFUNC = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.POINTER(MONITORS_INFO))
+#captureprocessobject=None
+#@SCRONMONITORSFUNC
+#def cb_screen_on_monitors(mnts):
+#    captureprocessobject.on_monitors(mnts);
+
+@SCRLOGWRTFUNC
+def cb_write_log(i,s):
+    f = _libmap["cb_write_log"]
+    if f is not None:
+        f(i,s)
+
+
+func_screen_encode_result=None
+@SCRENCRESFUNC
+def cb_screen_encode_result(sz, pdata):
+    func_screen_encode_result(sz, pdata)
+    
+@SNDDATAFUNC
+def cb_sound_data(sz, pdata):
+    f = _libmap["cb_sound_data"]
+    if f is not None:
+        f(sz, pdata)
+
+func_sound_encode_result=None
+@SNDENCRESFUNC
+def cb_sound_encode_result(sz, pdata):
+    func_sound_encode_result(sz, pdata)    

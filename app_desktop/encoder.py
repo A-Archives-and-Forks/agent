@@ -180,11 +180,20 @@ class ProcessEncoder(ipc.ChildProcessThread):
         self._memmap=joreq["monitors"]["memmap"]
         self._cond=joreq["monitors"]["cond"]
         self._curpos=joreq["monitors"]["curpos"]
+        self._curminx=-1
+        self._curminy=-1
         for mon in self._monitors:
             mon["curcapid"]=0
             mon["prevcurcapid"]=0
             mon["curcapst"]=b"K"
-            mon["encses"]=None                        
+            mon["encses"]=None
+            if self._curminx==-1 or self._curminy==-1:
+                self._curminx=mon["x"]
+                self._curminy=mon["y"]
+            if mon["x"]<self._curminx:
+                self._curminx=mon["x"]
+            if mon["y"]<self._curminy:
+                self._curminy=mon["y"]
         self._curmon=-2
         self._multiview=None
         self._curid=0
@@ -351,7 +360,7 @@ class ProcessEncoder(ipc.ChildProcessThread):
                     rgbimages.append(rgbimage)
                     if rgbimage is not None:                                                            
                         bchange=True            
-                self._cursor_encode()
+                self._cursor_encode(self._curminx,self._curminy,None,None)
                 if self._multiview["st"]!=multiviewst:
                     if multiviewst==b"K":
                         self._stream.write_bytes(self._struct_h.pack(common.TOKEN_FRAME_UNLOCKED))
@@ -402,11 +411,11 @@ class ProcessEncoder(ipc.ChildProcessThread):
                             utils.convert_bytes_to_structure(rgbimage,btsi)
                             btsd = self._memmap.read(rgbimage.sizedata)
                             rgbimage.data=ctypes.cast(ctypes.c_char_p(btsd),ctypes.c_void_p)
-                            self._cursor_encode()
+                            self._cursor_encode(mon["x"],mon["y"],mon["width"],mon["height"])
                             self._cond.notify_all()
                             break
                         else:                            
-                            self._cursor_encode()
+                            self._cursor_encode(mon["x"],mon["y"],mon["width"],mon["height"])
                     elif capst==b"P":
                         if mon["curcapst"]!=b"P":
                             self._stream.write_bytes(self._struct_h.pack(common.TOKEN_FRAME_LOCKED))
@@ -422,31 +431,34 @@ class ProcessEncoder(ipc.ChildProcessThread):
             #print("ltot:" + str(ltot))
             
         
-    def _cursor_encode(self):
+    def _cursor_encode(self,ofx,ofy,mw,mh):
         if self._curcounter.is_elapsed(0.02):
             bencode=False
             curimage=common.CURSOR_IMAGE()
             self._memmap.seek(self._curpos)
             btsi=self._memmap.read(ctypes.sizeof(curimage))
-            utils.convert_bytes_to_structure(curimage,btsi)            
-            if self._curx!=curimage.x or self._cury!=curimage.y or self._curvis!=curimage.visible:
-                self._curx=curimage.x
-                self._cury=curimage.y
-                self._curvis=curimage.visible
-                bencode=True
-            
-            curid=self._struct_Q.unpack(self._memmap.read(8))[0]
-            if self._curid!=curid:
-                self._curid=curid
-                btsd = utils.zlib_decompress(self._memmap.read(curimage.sizedata))                
-                curimage.data=ctypes.cast(ctypes.c_char_p(btsd),ctypes.c_void_p)
-                bencode=True
-            else:
-                curimage.sizedata=0
+            utils.convert_bytes_to_structure(curimage,btsi)
+            curimage.x=curimage.x-ofx
+            curimage.y=curimage.y-ofy
+            if curimage.x>=0 and curimage.y>=0 and (mw is None or curimage.x<mw) and (mh is None or curimage.y<mh):
+                if self._curx!=curimage.x or self._cury!=curimage.y or self._curvis!=curimage.visible:
+                    self._curx=curimage.x
+                    self._cury=curimage.y
+                    self._curvis=curimage.visible
+                    bencode=True
                 
-            if bencode==True:
-                self._scrmdl.DWAScreenCaptureCursorEncode(1,ctypes.byref(curimage),common.cb_screen_encode_result)
-                #print("cursor encode: " + str(self._curx) + " : " + str(self._cury) + " sz=" + str(curimage.sizedata)) 
+                curid=self._struct_Q.unpack(self._memmap.read(8))[0]
+                if self._curid!=curid:
+                    self._curid=curid
+                    btsd = utils.zlib_decompress(self._memmap.read(curimage.sizedata))                
+                    curimage.data=ctypes.cast(ctypes.c_char_p(btsd),ctypes.c_void_p)
+                    bencode=True
+                else:
+                    curimage.sizedata=0
+                    
+                if bencode==True:
+                    self._scrmdl.DWAScreenCaptureCursorEncode(1,ctypes.byref(curimage),common.cb_screen_encode_result)
+                    #print("cursor encode: " + str(self._curx) + " : " + str(self._cury) + " sz=" + str(curimage.sizedata)) 
             
             self._curcounter.reset()
     

@@ -8,6 +8,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <mach/vm_map.h>
 #include <Carbon/Carbon.h>
+#include <map>
 #include "../common/util.h"
 
 #ifndef MACINPUTS_H_
@@ -19,17 +20,26 @@ public:
 	MacInputs(void );
     ~MacInputs( void );
     void keyboard(const char* type,const char* key, bool ctrl, bool alt, bool shift, bool command);
-    void mouse(MONITORS_INFO_ITEM* moninfoitem, int x, int y, int factx, int facty, int button, int wheel, bool ctrl, bool alt, bool shift, bool command);
+    void mouse(int x, int y, int button, int wheel, bool ctrl, bool alt, bool shift, bool command);
     void copy();
     void paste();
+    void reloadKeyMap();
 
 private:
-    CGKeyCode keyCodeForCharWithLayout(const char c, const UCKeyboardLayout *uchrHeader);
-    CGKeyCode keyCodeForChar(const char c);
+    //CGKeyCode keyCodeForCharWithLayout(const char c, const UCKeyboardLayout *uchrHeader);
+    //CGKeyCode keyCodeForChar(const char c);
     CGKeyCode getCGKeyCode(const char* key);
     void ctrlaltshift(bool ctrl, bool alt, bool shift, bool command);
     int getModifiers(bool ctrl, bool alt, bool shift, bool command);
-
+    char* curkeyMapLayoutID;
+    char* getKeyMapLayoutID(TISInputSourceRef currentKeyboard);
+    void loadKeyMap(bool bforce);
+    void unloadKeyMap();
+    typedef struct{
+    	CGKeyCode keycode;
+		int modifier;
+	} KEYMAP;
+	std::map<UniChar,KEYMAP> hmUnicodeMap;
     int mousex;
     int mousey;
     bool mousebtn1Down;

@@ -15,10 +15,10 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #endif
 
 
-typedef void (*CallbackType)(int, wchar_t*);
+typedef void (*DWALoggerCallback)(int, wchar_t*);
 
 extern "C" {
-	void DWALoggerSetCallback(CallbackType callback);
+	void DWALoggerSetCallback(DWALoggerCallback callback);
 }
 
 void DWALoggerWriteInfo(const wchar_t *format, ...);

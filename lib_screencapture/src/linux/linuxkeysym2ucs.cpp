@@ -30,7 +30,7 @@
  * This software is in the public domain. Share and enjoy!
  *
  */
-#if defined OS_LINUX
+#if defined OS_XORG
 
 #include <X11/X.h>
 

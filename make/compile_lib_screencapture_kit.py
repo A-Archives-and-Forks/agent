@@ -9,22 +9,22 @@ import compile_generic
 class Compile(compile_generic.Compile):
     
     def __init__(self):
-        compile_generic.Compile.__init__(self,"lib_screencapture","desktopduplication")
+        compile_generic.Compile.__init__(self,"lib_screencapture","screencapurekit")
     
     def get_os_config(self,osn):
         conf=None
-        if osn=="windows":
+        if osn=="mac":
             conf={}
-            conf["outname"]="dwagscreencapturedesktopduplication.dll" 
-            conf["libraries"]=["gdi32", "userenv", "ole32" ,"d3d11", "dxgi"]
-            conf["linker_flags"]="-shared"
-            conf["cpp_compiler_flags"]="-DOS_DESKTOPDUPLICATION"
+            conf["outname"]="dwagscreencapturekit.dylib" 
+            conf["frameworks"]=["ApplicationServices","SystemConfiguration","IOKit","Carbon","AppKit","CoreMedia","CoreGraphics","CoreVideo","ScreenCaptureKit"]
+            conf["cpp_compiler_flags"]="-DOS_SCREENCAPTUREKIT"
         return conf
     
 
 if __name__ == "__main__":    
     m = Compile()
     #m.set_arch(compile_generic.ARCH_X86_32)
+    #m.set_arch(compile_generic.ARCH_X86_64)
     m.run()
     
     

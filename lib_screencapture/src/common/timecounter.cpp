@@ -7,6 +7,8 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include "timecounter.h"
 #if defined OS_WINDOWS
 #include <windows.h>
+#elif defined OS_LINUX
+#include <sys/time.h>
 #endif
 
 TimeCounter::TimeCounter(){
@@ -20,9 +22,14 @@ TimeCounter::~TimeCounter(){
 
 long TimeCounter::getMillisecons(){
 #if defined OS_LINUX
+	/*
 	struct timeb tmb;
 	ftime(&tmb);
 	return (tmb.time * 1000) + tmb.millitm;
+	*/
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	return (tv.tv_sec * 1000) + (tv.tv_usec / 1000);
 #elif defined OS_MAC
 	struct timeb tmb;
 	ftime(&tmb);

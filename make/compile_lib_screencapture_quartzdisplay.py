@@ -16,14 +16,16 @@ class Compile(compile_generic.Compile):
         if osn=="mac":
             conf={}
             conf["outname"]="dwagscreencapturequartzdisplay.dylib" 
-            conf["frameworks"]=["ApplicationServices","SystemConfiguration","IOKit","Carbon","AppKit"]
-            conf["cpp_compiler_flags"]="-DOS_QUARZDISPLAY"
+            conf["frameworks"]=["ApplicationServices","SystemConfiguration","IOKit","Carbon","AppKit","CoreMedia","CoreGraphics","CoreVideo","AVFoundation", "IOSurface"]
+            conf["cpp_compiler_flags"]="-DOS_QUARZDISPLAY -mmacosx-version-min=10.6"
+            conf["linker_flags"]="-mmacosx-version-min=10.6"
         return conf
     
 
 if __name__ == "__main__":    
     m = Compile()
-    #m.set_32bit()
+    #m.set_arch(compile_generic.ARCH_X86_64)
+    #m.set_arch(compile_generic.ARCH_X86_32)
     m.run()
     
     

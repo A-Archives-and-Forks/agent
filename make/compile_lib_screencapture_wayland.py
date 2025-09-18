@@ -9,22 +9,22 @@ import compile_generic
 class Compile(compile_generic.Compile):
     
     def __init__(self):
-        compile_generic.Compile.__init__(self,"lib_screencapture","desktopduplication")
+        compile_generic.Compile.__init__(self,"lib_screencapture","wayland")
     
     def get_os_config(self,osn):
         conf=None
-        if osn=="windows":
+        if osn=="linux":
             conf={}
-            conf["outname"]="dwagscreencapturedesktopduplication.dll" 
-            conf["libraries"]=["gdi32", "userenv", "ole32" ,"d3d11", "dxgi"]
-            conf["linker_flags"]="-shared"
-            conf["cpp_compiler_flags"]="-DOS_DESKTOPDUPLICATION"
+            conf["outname"]="dwagscreencapturewayland.so" 
+            conf["cpp_include_paths"]=["/usr/include/dbus-1.0","/usr/lib/dbus-1.0/include","/usr/include/pipewire-0.3","/usr/include/spa-0.2"] 
+            #conf["cpp_library_paths"]=""
+            conf["libraries"]=["dbus-1", "pipewire-0.3"]
+            conf["cpp_compiler_flags"]="-DOS_WAYLAND"
         return conf
     
 
 if __name__ == "__main__":    
     m = Compile()
-    #m.set_arch(compile_generic.ARCH_X86_32)
     m.run()
     
     

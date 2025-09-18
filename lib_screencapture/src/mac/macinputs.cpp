@@ -3,7 +3,7 @@ This Source Code Form is subject to the terms of the Mozilla
 Public License, v. 2.0. If a copy of the MPL was not distributed
 with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
-#if defined OS_QUARZDISPLAY
+#if defined OS_MAC
 
 #include "macinputs.h"
 
@@ -18,24 +18,143 @@ MacInputs::MacInputs(){
 	ctrlDown=false;
 	altDown=false;
 	shiftDown=false;
+	curkeyMapLayoutID=NULL;
+	loadKeyMap(true);
 }
 
 MacInputs::~MacInputs(){
+	unloadKeyMap();
+}
 
+char* MacInputs::getKeyMapLayoutID(TISInputSourceRef currentKeyboard){
+	CFStringRef layoutID = (CFStringRef)TISGetInputSourceProperty(currentKeyboard, kTISPropertyInputSourceID);
+	CFIndex length = CFStringGetLength(layoutID);
+	CFIndex maxSize = CFStringGetMaximumSizeForEncoding(length, kCFStringEncodingUTF8) + 1;
+	char* buffer = (char*)malloc(maxSize);
+	if (CFStringGetCString(layoutID, buffer, maxSize, kCFStringEncodingUTF8)) {
+		//CFRelease(layoutID);
+		return buffer;
+	}
+	//CFRelease(layoutID);
+	free(buffer);
+	return NULL;
+}
+
+void MacInputs::reloadKeyMap(){
+	//loadKeyMap(false);
+}
+
+void MacInputs::loadKeyMap(bool bforce){
+	TISInputSourceRef currentKeyboard = TISCopyCurrentKeyboardInputSource();
+	//char* appMapLayoutID = getKeyMapLayoutID(currentKeyboard);
+	//if ((bforce) || (curkeyMapLayoutID!=NULL && appMapLayoutID!=NULL && (strcmp(curkeyMapLayoutID,appMapLayoutID)!=0))){
+	//	unloadKeyMap();
+	//	curkeyMapLayoutID=appMapLayoutID;
+	//printf("layoutID: %s \n" ,curkeyMapLayoutID);
+
+	CFDataRef layoutData = (CFDataRef)TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData);
+	const UCKeyboardLayout *keyboardLayout =(const UCKeyboardLayout *)CFDataGetBytePtr(layoutData);
+	UInt32 keysDown = 0;
+	UniChar chars[1];
+	UniCharCount realLength;
+	UInt32 modifierKeyState = 0;
+	int listModifiers[4] = {0, 0 | shiftKey, 0 | optionKey, 0 | shiftKey | optionKey};
+	for (int m = 0; m < 4; m++) {
+		int mmodifiers = listModifiers[m];
+		for (int i = 0; i <= 127; i++) {
+			keysDown = i;
+			CGKeyCode kc = (CGKeyCode)i;
+			modifierKeyState = (mmodifiers >> 8) & 0xFF;
+			if (UCKeyTranslate(keyboardLayout,
+						   kc,
+						   kUCKeyActionDisplay,
+						   modifierKeyState,
+						   LMGetKbdType(),
+						   kUCKeyTranslateNoDeadKeysBit,
+						   &keysDown,
+						   sizeof(chars) / sizeof(chars[0]),
+						   &realLength,
+						   chars)==0){
+				if (realLength>0){
+					UniChar uc = chars[0];
+					int mctrl=false;
+					if (mmodifiers & controlKey){
+						mctrl=true;
+					}
+					int malt=false;
+					if (mmodifiers & optionKey){
+						malt=true;
+					}
+					int mshift=false;
+					if (mmodifiers & shiftKey){
+						mshift=true;
+					}
+					int mcommand=false;
+					if (mmodifiers & cmdKey){
+						mcommand=true;
+					}
+					std::map<UniChar,KEYMAP>::iterator itmap = hmUnicodeMap.find(uc);
+					if (itmap==hmUnicodeMap.end()){ //DO NO EXISTS
+						KEYMAP keyMap;
+						keyMap.keycode=kc;
+						keyMap.modifier=getModifiers(mctrl,malt,mshift,mcommand);
+						hmUnicodeMap[uc]=keyMap;
+						//printf("UNICODE i:%d %d uc: %lc  %d\n" ,m ,i, uc,keyMap.modifier);
+					}
+				}
+			}
+		}
+	}
+	CFRelease(layoutData);
+	//}else{
+	//	free(appMapLayoutID);
+	//}
+	CFRelease(currentKeyboard);
+}
+
+void MacInputs::unloadKeyMap() {
+	hmUnicodeMap.clear();
+	if (curkeyMapLayoutID!=NULL){
+		free(curkeyMapLayoutID);
+		curkeyMapLayoutID=NULL;
+	}
 }
 
 void MacInputs::keyboard(const char* type,const char* key, bool ctrl, bool alt, bool shift, bool command){
 	if (strcmp(type,"CHAR")==0){
+
+		bool bunicode=true;
 		int uc = atoi(key);
 		UniChar c = uc;
-		CGEventRef kdown = CGEventCreateKeyboardEvent(NULL, 0, true);
-		CGEventKeyboardSetUnicodeString(kdown,1,&c);
-		CGEventPost(kCGHIDEventTap, kdown);
-		CFRelease(kdown);
-		CGEventRef kup = CGEventCreateKeyboardEvent(NULL, 0, false);
-		CGEventKeyboardSetUnicodeString(kup, 1, &c);
-		CGEventPost(kCGHIDEventTap, kup);
-		CFRelease(kup);
+		std::map<UniChar,KEYMAP>::iterator itmap = hmUnicodeMap.find(c);
+		if (itmap!=hmUnicodeMap.end()){
+			KEYMAP keyMap=itmap->second;
+			//printf("KEYCODE %d  %d\n" ,keyMap.keycode,keyMap.modifier);
+			//I have added ctrlaltshift because on some applications CGEventSetFlags do not works. (versions<Ventura)
+			ctrlaltshift(keyMap.modifier & kCGEventFlagMaskControl,keyMap.modifier & kCGEventFlagMaskAlternate,keyMap.modifier & kCGEventFlagMaskShift,keyMap.modifier & kCGEventFlagMaskCommand);
+			CGEventRef kdown = CGEventCreateKeyboardEvent(NULL, keyMap.keycode, true);
+			CGEventSetFlags(kdown, (CGEventFlags)keyMap.modifier);
+			CGEventPost(kCGHIDEventTap, kdown);
+			CFRelease(kdown);
+			CGEventRef kup = CGEventCreateKeyboardEvent(NULL, keyMap.keycode, false);
+			CGEventSetFlags(kup, (CGEventFlags)keyMap.modifier);
+			CGEventPost(kCGHIDEventTap, kup);
+			CFRelease(kup);
+			//I have added ctrlaltshift because on some applications CGEventSetFlags do not works. (versions<Ventura)
+			ctrlaltshift(false,false,false,false);
+			bunicode=false;
+		}
+		if (bunicode){
+			//printf("UNICODE\n");
+			CGEventRef kdown = CGEventCreateKeyboardEvent(NULL, 0, true);
+			CGEventKeyboardSetUnicodeString(kdown,1,&c); //do not works on some applications (versions<Ventura)
+			CGEventPost(kCGHIDEventTap, kdown);
+			CFRelease(kdown);
+			CGEventRef kup = CGEventCreateKeyboardEvent(NULL, 0, false);
+			CGEventKeyboardSetUnicodeString(kup, 1, &c);
+			CGEventPost(kCGHIDEventTap, kup);
+			CFRelease(kup);
+		}
 	}else if (strcmp(type,"KEY")==0){
 		CGKeyCode c = getCGKeyCode(key);
 		if (c!=UINT16_MAX){
@@ -54,23 +173,14 @@ void MacInputs::keyboard(const char* type,const char* key, bool ctrl, bool alt, 
 	}
 }
 
-void MacInputs::mouse(MONITORS_INFO_ITEM* moninfoitem, int x, int y, int factx, int facty, int button, int wheel, bool ctrl, bool alt, bool shift, bool command){
+void MacInputs::mouse(int x, int y, int button, int wheel, bool ctrl, bool alt, bool shift, bool command){
 	//ctrlaltshift(ctrl,alt,shift,command);
 	if ((x!=-1) && (y!=-1)){
 		mousex=x;
 		mousey=y;
 	}
-
-	/*MonitorInfo* mi = &monitorsInfo[0];
-	if (mi==NULL){
-		return;
-	}*/
-
-	CGPoint cmp = CGPointMake((int)((float)mousex/factx), (int)((float)mousey/facty));
-
-
+	CGPoint cmp = CGPointMake(mousex, mousey);
 	if (button==64) { //CLICK
-
 		CGEventRef theEvent = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, cmp, kCGMouseButtonLeft);
 		CGEventSetFlags(theEvent, (CGEventFlags)getModifiers(ctrl,alt,shift,command));
 		CGEventPost(kCGHIDEventTap, theEvent);
@@ -83,15 +193,12 @@ void MacInputs::mouse(MONITORS_INFO_ITEM* moninfoitem, int x, int y, int factx, 
 		CGEventSetType(theEvent, kCGEventLeftMouseUp);
 		CGEventSetFlags(theEvent, (CGEventFlags)getModifiers(ctrl,alt,shift,command));
 		CGEventPost(kCGHIDEventTap, theEvent);
-
 		CGEventSetIntegerValueField(theEvent, kCGMouseEventClickState, 2);
-
 		CGEventSetType(theEvent, kCGEventLeftMouseDown);
 		CGEventSetFlags(theEvent, (CGEventFlags)getModifiers(ctrl,alt,shift,command));
 		CGEventPost(kCGHIDEventTap, theEvent);
 		CGEventSetType(theEvent, kCGEventLeftMouseUp);
 		CGEventPost(kCGHIDEventTap, theEvent);
-
 		CFRelease(theEvent);
 	}else{
 		bool moveonly=true;
@@ -167,47 +274,39 @@ void MacInputs::paste(){
 	keyboard("KEY","V",false,false,false,true);
 }
 
-CGKeyCode MacInputs::keyCodeForCharWithLayout(const char c, const UCKeyboardLayout *uchrHeader){
+/*CGKeyCode MacInputs::keyCodeForCharWithLayout(const char c, const UCKeyboardLayout *uchrHeader){
     uint8_t *uchrData = (uint8_t *)uchrHeader;
     const UCKeyboardTypeHeader *uchrKeyboardList = uchrHeader->keyboardTypeList;
     ItemCount i, j;
-    for (i = 0; i < uchrHeader->keyboardTypeCount; ++i) {
-        UCKeyToCharTableIndex *uchrKeyIX = (UCKeyToCharTableIndex *)
-        (uchrData + (uchrKeyboardList[i].keyToCharTableIndexOffset));
-
+    for (i = 0; i < uchrHeader->keyboardTypeCount; ++i){
+        UCKeyToCharTableIndex *uchrKeyIX = (UCKeyToCharTableIndex *)(uchrData + (uchrKeyboardList[i].keyToCharTableIndexOffset));
         UCKeyStateRecordsIndex *stateRecordsIndex;
         if (uchrKeyboardList[i].keyStateRecordsIndexOffset != 0) {
-            stateRecordsIndex = (UCKeyStateRecordsIndex *)
-                (uchrData + (uchrKeyboardList[i].keyStateRecordsIndexOffset));
-
+            stateRecordsIndex = (UCKeyStateRecordsIndex *)(uchrData + (uchrKeyboardList[i].keyStateRecordsIndexOffset));
             if ((stateRecordsIndex->keyStateRecordsIndexFormat) != kUCKeyStateRecordsIndexFormat) {
                 stateRecordsIndex = NULL;
             }
         } else {
             stateRecordsIndex = NULL;
         }
-        if ((uchrKeyIX->keyToCharTableIndexFormat) != kUCKeyToCharTableIndexFormat) {
+        if ((uchrKeyIX->keyToCharTableIndexFormat) != kUCKeyToCharTableIndexFormat){
             continue;
         }
         for (j = 0; j < uchrKeyIX->keyToCharTableCount; ++j) {
-            UCKeyOutput *keyToCharData =
-                (UCKeyOutput *)(uchrData + (uchrKeyIX->keyToCharTableOffsets[j]));
-
+            UCKeyOutput *keyToCharData = (UCKeyOutput *)(uchrData + (uchrKeyIX->keyToCharTableOffsets[j]));
             UInt16 k;
-            for (k = 0; k < uchrKeyIX->keyToCharTableSize; ++k) {
-                if ((keyToCharData[k] & kUCKeyOutputTestForIndexMask) ==
-                    kUCKeyOutputStateIndexMask) {
+            for (k = 0; k < uchrKeyIX->keyToCharTableSize; ++k){
+                if ((keyToCharData[k] & kUCKeyOutputTestForIndexMask) == kUCKeyOutputStateIndexMask){
                     long keyIndex = (keyToCharData[k] & kUCKeyOutputGetIndexMask);
-                    if (stateRecordsIndex != NULL &&
-                        keyIndex <= (stateRecordsIndex->keyStateRecordCount)) {
+                    if (stateRecordsIndex != NULL && keyIndex <= (stateRecordsIndex->keyStateRecordCount)) {
                         UCKeyStateRecord *stateRecord = (UCKeyStateRecord *)(uchrData + (stateRecordsIndex->keyStateRecordOffsets[keyIndex]));
-                        if ((stateRecord->stateZeroCharData) == c) {
+                        if ((stateRecord->stateZeroCharData) == c){
                             return (CGKeyCode)k;
                         }
-                    } else if (keyToCharData[k] == c) {
+                    }else if (keyToCharData[k] == c){
                         return (CGKeyCode)k;
                     }
-                } else if (((keyToCharData[k] & kUCKeyOutputTestForIndexMask)
+                }else if (((keyToCharData[k] & kUCKeyOutputTestForIndexMask)
                             != kUCKeyOutputSequenceIndexMask) &&
                            keyToCharData[k] != 0xFFFE &&
                            keyToCharData[k] != 0xFFFF &&
@@ -223,19 +322,16 @@ CGKeyCode MacInputs::keyCodeForCharWithLayout(const char c, const UCKeyboardLayo
 CGKeyCode MacInputs::keyCodeForChar(const char c){
     CFDataRef currentLayoutData;
     TISInputSourceRef currentKeyboard = TISCopyCurrentKeyboardInputSource();
-
     if (currentKeyboard == NULL) {
         return UINT16_MAX;
     }
-
     currentLayoutData = (CFDataRef)TISGetInputSourceProperty(currentKeyboard, kTISPropertyUnicodeKeyLayoutData);
     CFRelease(currentKeyboard);
     if (currentLayoutData == NULL) {
         return UINT16_MAX;
     }
-
     return keyCodeForCharWithLayout(c, (const UCKeyboardLayout *)CFDataGetBytePtr(currentLayoutData));
-}
+}*/
 
 CGKeyCode MacInputs::getCGKeyCode(const char* key){
 	if (strcmp(key,"CONTROL")==0){
@@ -321,7 +417,13 @@ CGKeyCode MacInputs::getCGKeyCode(const char* key){
 	}else if (strcmp(key,"F12")==0){
 		return 0x6F;
 	}else{
-		return keyCodeForChar(key[0]);
+		UniChar c = int(key[0]);
+		std::map<UniChar,KEYMAP>::iterator itmap = hmUnicodeMap.find(c);
+		if (itmap!=hmUnicodeMap.end()){
+			KEYMAP keyMap=itmap->second;
+			return keyMap.keycode;
+		}
+		//return keyCodeForChar(key[0]);
 	}
 	return UINT16_MAX;
 }
