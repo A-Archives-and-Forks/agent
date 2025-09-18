@@ -67,40 +67,46 @@ class ResText:
             self._data_current=appdt
         else:
             self._lang_current="default"
-            self._data_current=self._data_default
-            
+            self._data_current=self._data_default        
+        
+    def get_locale(self):
+        self._semaphore.acquire()
+        try:
+            if self._lang_current is None:
+                applng=None
+                try:
+                    if utils.is_windows():
+                        import ctypes
+                        windll = ctypes.windll.kernel32
+                        wl = locale.windows_locale[windll.GetUserDefaultUILanguage()]
+                        #applng=wl.split("_")[0]
+                        applng=wl
+                    elif utils.is_mac():
+                        p = subprocess.Popen(['defaults', 'read', '-g', 'AppleLocale'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        sout, serr = p.communicate()
+                        if sout is not None:
+                            applng = sout.replace("\n","").replace(" ","_")[:10]
+                except:
+                    None                    
+                try:
+                    if applng is None:
+                        l = locale.getdefaultlocale()
+                        if l is not None:
+                            applng=l[0]
+                except:
+                    None
+                
+                self._set_locale(applng)
+                
+        finally:
+            self._semaphore.release()
+        return self._lang_current;
+     
     def get(self, key):
         try:
-            self._semaphore.acquire()
-            try:
-                if self._lang_current is None:
-                    applng=None
-                    try:
-                        if utils.is_windows():
-                            import ctypes
-                            windll = ctypes.windll.kernel32
-                            windll.GetUserDefaultUILanguage()
-                            wl = locale.windows_locale[windll.GetUserDefaultUILanguage()]
-                            applng=wl.split("_")[0]
-                        elif utils.is_mac():
-                            p = subprocess.Popen(['defaults', 'read', '-g', 'AppleLocale'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                            sout, serr = p.communicate()
-                            if sout is not None:
-                                applng = sout.replace("\n","").replace(" ","_")[:10]
-                    except:
-                        None                    
-                    try:
-                        if applng is None:
-                            l = locale.getdefaultlocale()
-                            if l is not None:
-                                applng=l[0]
-                    except:
-                        None
-                    
-                    self._set_locale(applng)
-                    
-            finally:
-                self._semaphore.release()
+            
+            #LOAD DATA
+            self.get_locale()
             
             if key in self._data_current:
                 return self._data_current[key]

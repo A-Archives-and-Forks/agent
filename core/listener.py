@@ -230,12 +230,18 @@ class IPCConfig(threading.Thread):
         return "ERROR:INVALID_PARAMETERS."
     
     def _req_install_new_agent(self, prms):
-        #user, password, name, id
+        #user, password, name, id, group
         if "user" in prms and "password" in prms and "name" in prms:
             user=prms["user"]
             password=prms["password"]
             name=prms["name"]
-            self._agent.install_new_agent(user,password,name)
+            group=None
+            groupCreate=False
+            if "group" in prms:
+                group=prms["group"]
+                if "groupCreate" in prms and prms["groupCreate"] == True:                    
+                    groupCreate=True
+            self._agent.install_new_agent(user,password,name,group,groupCreate)
             return "OK"
         return "ERROR:INVALID_PARAMETERS."
     

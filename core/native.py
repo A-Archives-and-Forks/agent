@@ -75,19 +75,19 @@ def get_library_config(name):
     else:
         return None
 
-def _load_libraries_with_deps(ar,name):
+def _load_libraries_with_deps_list(ar,name):
     cnflib=get_library_config(name)
     if cnflib is not None:
         if "lib_dependencies" in cnflib:
             for ln in cnflib["lib_dependencies"]:
-                _load_libraries_with_deps(ar,ln)
+                _load_libraries_with_deps_list(ar,ln)
         if "filename_" + get_suffix() in cnflib:
             fn = cnflib["filename_" + get_suffix()]
             ar.insert(0,_load_lib_obj(fn))
 
 def load_libraries_with_deps(name):
     lstlibs=[]
-    _load_libraries_with_deps(lstlibs,name)
+    _load_libraries_with_deps_list(lstlibs,name)
     return lstlibs
 
 def unload_libraries(lstlibs):

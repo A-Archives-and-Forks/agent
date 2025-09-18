@@ -128,6 +128,16 @@ def get_exception():
     except:
         return Exception("Unexpected error (get_exception).")
 
+def is_connection_refused_exception(e):
+    try:
+        import socket
+        if is_py2(): 
+            return type(e) == socket.error and e.errno == socket.errno.ECONNREFUSED
+        else: 
+            return  isinstance(e, ConnectionRefusedError)
+    except:
+        None
+    return False
 
 if is_windows():
     if is_py2():
@@ -165,16 +175,19 @@ else:
 #########
 # BYTES #
 #########
-if is_py2():    
+if is_py2():
     bytes_new=str
+    bytes_init=lambda sz: "\x00"*sz
     bytes_join=lambda ar: "".join(ar)
     bytes_get=lambda b, i: ord(b[i])
     bytes_to_str_hex=lambda s: s.encode('hex')            
 else:
     bytes_new=bytes
+    bytes_init=lambda sz: b"\x00"*sz
     bytes_join=lambda ar: b"".join(ar)
     bytes_get=lambda b, i: b[i]
     bytes_to_str_hex=bytes.hex
+bytes_random=os.urandom
 bytes_to_str=lambda b, enc="ascii": b.decode(enc, errors="replace")
 
 
@@ -201,7 +214,7 @@ str_to_bytes=lambda s, enc="ascii": s.encode(enc, errors="replace")
 #######
 # URL #
 #######
-if is_py2():    
+if is_py2():
     url_parse=urlparse.urlparse
     url_parse_quote_plus=urllib.quote_plus
     url_parse_quote=urllib.quote
@@ -385,14 +398,14 @@ class Logger():
     def __init__(self, conf):
         self._logger = logging.getLogger()
         if "filename" in conf:
-            hdlr = logging.handlers.RotatingFileHandler(conf["filename"], 'a', 1000000, 3)
+            hdlr = logging.handlers.RotatingFileHandler(conf["filename"], "a", 1000000, 3)
         else:
             hdlr = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+        formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
         hdlr.setFormatter(formatter)
         self._logger.addHandler(hdlr) 
         self._logger.setLevel(logging.INFO)
-        #Reindirizza stdout e stderr
+        #Redirect stdout e stderr
         sys.stdout=LoggerStdRedirect(self._logger,logging.DEBUG)
         sys.stderr=LoggerStdRedirect(self._logger,logging.ERROR)
         self._lock = threading.Lock()
@@ -524,7 +537,10 @@ class Counter:
     def __init__(self, v=None):
         self._current_elapsed = 0
         self._current_time = get_time()
-        self._time_to_elapsed=v
+        if v is not None:
+            self._time_to_elapsed=v
+        else:
+            self._time_to_elapsed=0
         self._stopped=False
 
     def start(self):

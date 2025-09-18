@@ -96,7 +96,7 @@ if __name__ == "__main__":
     '''
     time.sleep(4)
     print("END")
-    #ipc.ipc_manager.destory()
+    #ipc.ipc_manager.destroy()
     #time.sleep(2)    
     #print("MANAGER DESTORY")
     ipc.terminate()
