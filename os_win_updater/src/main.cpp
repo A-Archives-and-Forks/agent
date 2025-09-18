@@ -37,7 +37,7 @@ void WriteToLog(const wchar_t* str) {
 	}
 }
 
-bool compareFile(wchar_t* fn1,wchar_t* fn2) {
+bool compareFileOLD(wchar_t* fn1,wchar_t* fn2) {
 	int BUFFERSIZE=1024*16;
 	HANDLE hFile1;
 	DWORD  dwBytesRead1 = 0;
@@ -85,7 +85,7 @@ bool compareFile(wchar_t* fn1,wchar_t* fn2) {
 			bret = false;
 			break;
 		}else{
-			for (int i=0;i<dwBytesRead1;i++){
+			for (long unsigned int i=0;i<dwBytesRead1;i++){
 				if (strcmp(&ReadBuffer1[i],&ReadBuffer2[i])!=0){
 					bret = false;
 					break;
@@ -148,7 +148,7 @@ bool deleteDir(const wchar_t *path){
     return bret;
 }
 
-bool updateFiles(wstring dsub){
+bool updateFilesOLD(wstring dsub){
 	bool bret=true;
 	wstring dwkr=workPath;
 	wstring dupd=workPath;
@@ -194,7 +194,7 @@ bool updateFiles(wstring dsub){
 					dsubapp.append(L"\\");
 				}
 				dsubapp.append(FindFileData.cFileName);
-				if (!updateFiles(dsubapp)){
+				if (!updateFilesOLD(dsubapp)){
 					bret=false;
 				}
             }else{
@@ -209,7 +209,7 @@ bool updateFiles(wstring dsub){
 					}
 				}
 				if (!existsFile(strwkr)){
-					if ((CopyFileW(strupd,strwkr,TRUE)!=0) && (compareFile(strupd,strwkr))){
+					if ((CopyFileW(strupd,strwkr,TRUE)!=0) && (compareFileOLD(strupd,strwkr))){
 						wchar_t strmsg[1000];
 						wcscpy(strmsg, L"Copied file ");
 						wcscat(strmsg, strupd);
@@ -232,6 +232,32 @@ bool updateFiles(wstring dsub){
     return bret;
 }
 
+bool checkUpdateOLD(){
+	workPath=getDWAgentPath();
+	wstring dupd=workPath;
+	if (updateFilesOLD(L"")){
+		return deleteDir(dupd.c_str());
+	}else{
+		return false;
+	}
+}
+
+void trim(wstring& str, wchar_t c) {
+    string::size_type pos = str.find_last_not_of(c);
+    if (pos != string::npos) {
+        str.erase(pos + 1);
+        pos = str.find_first_not_of(c);
+        if (pos != string::npos) str.erase(0, pos);
+    } else str.erase(str.begin(), str.end());
+}
+
+void trimAll(wstring& str) {
+    trim(str, ' ');
+    trim(str, '\r');
+    trim(str, '\n');
+    trim(str, '\t');
+}
+
 void setCallbackWriteLog(CallbackType callback){
 	g_callback_wlog=callback;
 }
@@ -241,10 +267,163 @@ bool checkUpdate(){
 	wstring dupd=workPath;
 	dupd.append(L"\\update");
 	if(existsDir(dupd)){
-		if (updateFiles(L"")){
-			return deleteDir(dupd.c_str());
+		wstring pythonPath = L"";
+		wstring pythonHome = L"";
+		wstring serviceName = L"";
+
+		//GET PYTHON EXE PATH
+		wstring appfn = workPath;
+		appfn.append(L"\\native\\service.properties");
+		HANDLE hFile = CreateFileW(appfn.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		if (hFile!=INVALID_HANDLE_VALUE){
+			DWORD  dwBytesRead;
+			char buff[16*1024];
+			ReadFile(hFile, buff, sizeof(buff), &dwBytesRead, NULL);
+			CloseHandle(hFile);
+			wstring apps;
+			int numc = MultiByteToWideChar(CP_UTF8, 0, buff, dwBytesRead, NULL, 0);
+			if (numc){
+				wchar_t *wszTo = new wchar_t[numc + 1];
+				wszTo[numc] = L'\0';
+				MultiByteToWideChar(CP_UTF8, 0, buff, -1, wszTo, numc);
+				apps = wszTo;
+				delete[] wszTo;
+			}
+			int pel = 0;
+			while(pel>=0){
+				int prepel=pel;
+				pel = apps.find(L"\n",prepel);
+				wstring line;
+				if (pel<0){
+					line = apps.substr(prepel);
+				}else{
+					line = apps.substr(prepel, pel-prepel);
+					pel++;
+				}
+				trimAll(line);
+
+				//Legge le proprietà necessarie
+				int endpart1 = line.find_first_of(L"=");
+				wstring part1 = line.substr(0, endpart1);
+				trimAll(part1);
+				wstring part2 = line.substr(endpart1 + 1);
+				trimAll(part2);
+
+				if (part1.compare(L"serviceName") == 0) {
+					serviceName = part2;
+				}
+
+				if (part1.compare(L"pythonHome") == 0) {
+					pythonHome = part2;
+				}
+
+				if (part1.compare(L"pythonPath") == 0) {
+					pythonPath = part2;
+				}
+			}
+		}
+
+		//UPDATE updater.py
+		wchar_t updaternew[MAX_PATH];
+		wcscpy(updaternew, dupd.c_str());
+		wcscat(updaternew,L"\\updater.py");
+		wchar_t updaterorig[MAX_PATH];
+		wcscpy(updaterorig, workPath.c_str());
+		wcscat(updaterorig,L"\\updater.py");
+
+		if (existsFile(updaternew)){
+			if (existsFile(updaterorig)){
+				if (!DeleteFileW(updaterorig)){
+					wchar_t strmsg[1000];
+					wcscpy(strmsg, L"ERROR:Delete file ");
+					wcscat(strmsg, updaterorig);
+					wcscat(strmsg, L" .");
+					WriteToLog(strmsg);
+					return false;
+				}
+			}
+			if (!(MoveFileW(updaternew,updaterorig))){
+				wchar_t strmsg[1000];
+				wcscpy(strmsg, L"ERROR:Move file ");
+				wcscat(strmsg, updaternew);
+				wcscat(strmsg, L" .");
+				WriteToLog(strmsg);
+				return false;
+			}
+
+		}
+
+		//RUN updater.py
+		if ((wcscmp(pythonPath.c_str(),L"")!=0) && existsFile(updaterorig)){
+			wchar_t updatestatus[MAX_PATH];
+			wcscpy(updatestatus, workPath.c_str());
+			wcscat(updatestatus,L"\\updater.status");
+			if (existsFile(updatestatus)){
+				if (!DeleteFileW(updatestatus)){
+					wchar_t strmsg[1000];
+					wcscpy(strmsg, L"ERROR:Delete file ");
+					wcscat(strmsg, updatestatus);
+					wcscat(strmsg, L" .");
+					WriteToLog(strmsg);
+					return false;
+				}
+			}
+
+			wstring args = L"\"";
+			args.append(pythonPath);
+			args.append(L"\" -S -m updater");
+
+			STARTUPINFOW siStartupInfo;
+			PROCESS_INFORMATION piProcessInfo;
+			memset(&siStartupInfo, 0, sizeof (siStartupInfo));
+			memset(&piProcessInfo, 0, sizeof (piProcessInfo));
+			siStartupInfo.cb = sizeof (siStartupInfo);
+			siStartupInfo.lpReserved=NULL;
+			siStartupInfo.lpDesktop=NULL;
+			wstring titName;
+			titName.append(serviceName);
+			titName.append(L"Upd");
+			siStartupInfo.lpTitle=(LPWSTR)titName.c_str();
+			siStartupInfo.dwX=0;
+			siStartupInfo.dwY=0;
+			siStartupInfo.dwXSize=0;
+			siStartupInfo.dwYSize=0;
+			siStartupInfo.dwXCountChars=0;
+			siStartupInfo.dwYCountChars=0;
+			siStartupInfo.dwFillAttribute=0;
+			siStartupInfo.wShowWindow = SW_HIDE;
+			siStartupInfo.dwFlags = STARTF_USESHOWWINDOW;
+
+			SECURITY_ATTRIBUTES sa = {0};
+			sa.nLength = sizeof (SECURITY_ATTRIBUTES);
+			sa.bInheritHandle = FALSE;
+			sa.lpSecurityDescriptor = NULL;
+
+			if (pythonHome.compare(L"") != 0) {
+				SetEnvironmentVariableW(TEXT(L"PYTHONHOME"),pythonHome.c_str());
+			}
+
+			if (CreateProcessW(NULL,
+					towchar_t(args),
+					NULL,
+					NULL,
+					sa.bInheritHandle,
+					HIGH_PRIORITY_CLASS | CREATE_NEW_CONSOLE | CREATE_UNICODE_ENVIRONMENT,
+					NULL,
+					towchar_t(workPath),
+					&siStartupInfo,
+					&piProcessInfo) == TRUE) {
+				WaitForSingleObject(piProcessInfo.hProcess, INFINITE);
+			}
+			if (!existsFile(updatestatus) && existsDir(dupd)){
+				deleteDir(dupd.c_str());
+				wchar_t strmsg[1000];
+				wcscpy(strmsg, L"Run updater.py failed.");
+				WriteToLog(strmsg);
+			}
+			return true;
 		}else{
-			return false;
+			return checkUpdateOLD();
 		}
     }
 	return true;

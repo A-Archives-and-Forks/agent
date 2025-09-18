@@ -220,7 +220,12 @@ int width=200;
 						NSString *fileName = [contentOfDirectory objectAtIndex:i];
 						NSString *srcPath = [custompath stringByAppendingFormat:@"%@%@",@"/",fileName];
 						NSString *dstPath = [basepth stringByAppendingFormat:@"%@%@",@"/",fileName];
-						[[NSFileManager defaultManager] copyPath:srcPath toPath:dstPath handler:nil];
+						//[[NSFileManager defaultManager] copyPath:srcPath toPath:dstPath handler:nil]; DEPRECATED
+						NSError *error = nil;
+						BOOL success = [[NSFileManager defaultManager] copyItemAtPath:srcPath toPath:dstPath error:&error];
+						if (!success) {
+							errclose=@"Error copy custom path.";
+						}
 					}
 				}
 			}
@@ -231,7 +236,7 @@ int width=200;
 
 	if (errclose==nil){
 		//Execute installer
-		NSString *installpath=[exepth stringByAppendingString:@"/install"];
+		NSString *installpath=[exepth stringByAppendingString:@"/Install"];
 		if ([[NSFileManager defaultManager] fileExistsAtPath:installpath]==YES){
 			//Fix High Sierra
 			if ([[NSFileManager defaultManager] fileExistsAtPath:@"/usr/lib/libz.1.2.8.dylib"]==YES){
@@ -240,9 +245,6 @@ int width=200;
 				[[NSFileManager defaultManager] removeItemAtPath:libzpath error:&appError];
 			    [[NSFileManager defaultManager] copyItemAtPath:@"/usr/lib/libz.1.2.8.dylib" toPath:libzpath error:&appError];
 			}
-			[NSThread sleepForTimeInterval:0.25f];
-			[window orderOut:[window contentView]]; //Hide window
-
 			BOOL runAsAdmin=NO;
 			while(true){
 				[self removeFileRunAsAdminInstall:basepth];
@@ -256,8 +258,13 @@ int width=200;
 				}
 				[taskrun setCurrentDirectoryPath:basepth];
 				[taskrun launch];
+				[NSThread sleepForTimeInterval:2.0f];
+				dispatch_async(dispatch_get_main_queue(), ^{
+					if ([window isVisible]) {
+						[window orderOut:nil];
+					}
+				});
 				[taskrun waitUntilExit];
-
 				if ([taskrun terminationStatus] == 0){
 					if ((!runAsAdmin) && ([self existsFileRunAsAdminInstall:basepth])){
 						runAsAdmin=YES;
@@ -273,9 +280,9 @@ int width=200;
 					}
 				}
 				[taskrun release];
-			}
+			}			
 		}else{
-			errclose=@"Error missing install.";
+			errclose=@"Error missing executable.";
 		}
 	}
 

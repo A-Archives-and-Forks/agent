@@ -2,23 +2,24 @@
 <!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-        <key>Label</key>
-        <string>@LDNAME_SYSTRAY@</string>
-        <key>Disabled</key>
-        <false/>
-	<key>LimitLoadToSessionType</key>
+    <key>Label</key>
+    <string>@LDNAME_SYSTRAY@</string>
+    <key>LimitLoadToSessionType</key>
 	<array>
 		<string>Aqua</string>
 	</array>
-        <key>ProgramArguments</key>
-        <array>
-                <string>@PATH_DWA@/native/dwagsystray</string>
-				<string>@PATH_DWA@</string>
-				<string>@EXE_NAME@</string>
-        </array>
-        <key>RunAtLoad</key>
-        <true/>
-        <key>KeepAlive</key>
-        <true/>
+    <key>ProgramArguments</key>
+    <array>
+    	<string>@PATH_DWA@/native/DWAgentSvc.app/Contents/MacOS/DWAgentSvc</string>
+		<string>@PATH_DWA@</string>
+		<string>systray</string>
+		<string>@EXE_NAME@</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+    <true/>
+    <key>ExitTimeOut</key>
+    <integer>10</integer>
 </dict>
 </plist>

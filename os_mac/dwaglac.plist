@@ -3,24 +3,26 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>@LDNAME_SERVICE@</string>
-	<key>ProgramArguments</key>
+	<string>@LDNAME_LAC@</string>
+	<key>LimitLoadToSessionType</key>
 	<array>
+		<string>LoginWindow</string>
+        <string>Aqua</string>
+	</array>
+	<key>ProgramArguments</key>
+    <array>
     	<string>@PATH_DWA@/native/DWAgentSvc.app/Contents/MacOS/DWAgentSvc</string>
 		<string>@PATH_DWA@</string>
-		<string>run</string>
+		<string>lac</string>
+		<string>@EXE_NAME@</string>
 	</array>
-	<key>OnDemand</key>
-	<false/>
-	<key>StandardErrorPath</key>
-	<string>@PATH_DWA@/native/service.log</string>
-	<key>StandardOutPath</key>
-	<string>@PATH_DWA@/native/service.log</string>
+	<key>ProcessType</key>
+    <string>Interactive</string>
 	<key>RunAtLoad</key>
 	<true/>
 	<key>KeepAlive</key>
-	<true/>
-	<key>ExitTimeOut</key>
-	<integer>60</integer>
+    <true/>
+    <key>ExitTimeOut</key>
+    <integer>10</integer>
 </dict>
 </plist>

@@ -247,18 +247,6 @@ bool processStart() {
     sa.bInheritHandle = FALSE;
     sa.lpSecurityDescriptor = NULL;
 
-
-	HANDLE h = CreateFileW(towchar_t(logfile), GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, &sa, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-    if (h != INVALID_HANDLE_VALUE) {
-        SetFilePointer(h, 0L, NULL, FILE_END);
-        siStartupInfo.dwFlags = STARTF_USESTDHANDLES;
-        siStartupInfo.hStdOutput = h;
-        siStartupInfo.hStdError = h;
-        //siStartupInfo.hStdInput = h;
-    } else {
-		WriteToLog(L"ERROR: Redirect out/err to file");
-    }
-	
 	if (pythonHome.compare(L"") != 0) {
 		if (SetEnvironmentVariableW(TEXT(L"PYTHONHOME"),pythonHome.c_str())){
 			wstring appph=L"";

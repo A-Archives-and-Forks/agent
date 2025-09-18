@@ -322,7 +322,14 @@ test_pid() {
 		PIDDW=`cat dwagent.pid`
 		kill -0 $PIDDW > /dev/null 2>&1
 		if test $? -eq 0; then
-			return 1
+			cmdtest=$(cat "/proc/$PIDDW/comm")
+			cmdexpected=$(cat "/proc/$$/comm")
+        	if [ "$cmdtest" = "$cmdexpected" ]; then
+        		return 1
+        	else
+        		echo "Warning: @NAME@ is not running, but pid file exists "
+				rem_file dwagent.pid
+        	fi			
 		else
 			echo "Warning: @NAME@ is not running, but pid file exists "
 			rem_file dwagent.pid
@@ -339,7 +346,7 @@ run() {
 		while [ ! -f dwagent.stop ]
 		do
 			. "${PATH_DWA_NATIVE}/dwagupd"
-			if check_update "${PATH_DWA}"; then
+			if check_update "${PATH_DWA}" "@EXE_NAME@"; then
 				cd "${PATH_DWA}"
 				export LD_LIBRARY_PATH=${PATH_DWA_RUNTIME_LIBRARY}
 				export PYTHONIOENCODING=utf-8

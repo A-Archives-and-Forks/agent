@@ -3,7 +3,7 @@
 #Public License, v. 2.0. If a copy of the MPL was not distributed
 #with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-copy_recursive(){
+copy_recursive_old(){
 	retval=0
 	for file in $1**
 	do
@@ -16,7 +16,7 @@ copy_recursive(){
 			fi
 		fi
 		fdir="$fsrc"
-		if copy_recursive "$fsrc/" "$fdst/"; then
+		if copy_recursive_old "$fsrc/" "$fdst/"; then
 			if ! rm -r -f "$fdir"; then
 				retval=1
 			fi	
@@ -44,33 +44,97 @@ copy_recursive(){
 	return $retval
 }
 
-check_update(){
+check_update_old(){
 	PATH_DWA=$1
+	EXE_NAME=$2
 	INST_VER=0
 	if [ -f "${PATH_DWA}/native/installer.ver" ]; then
 		INST_VER=$(cat "${PATH_DWA}/native/installer.ver")
 	fi
-	if [ -d "${PATH_DWA}/update" ]; then
-		if copy_recursive "${PATH_DWA}/update/" "${PATH_DWA}/"; then
-			if ! rm -r -f "${PATH_DWA}/update"; then
-				echo "Update error."
-				return 1
-			fi
-		else
+	if copy_recursive_old "${PATH_DWA}/update/" "${PATH_DWA}/"; then
+		if ! rm -r -f "${PATH_DWA}/update"; then
 			echo "Update error."
 			return 1
 		fi
+	else
+		echo "Update error."
+		return 1
 	fi
 	#03/11/2021 COMPATIBILITY OLD VERSION dwagsvc
 	if [ $INST_VER -le 0 ]; then
 		if [ -f "${PATH_DWA}/agent.py" ]; then
-			export LD_LIBRARY_PATH=${PATH_DWA}/runtime/lib
-			export PYTHONIOENCODING=utf-8
-			"${PATH_DWA}/runtime/bin/dwagent" -m compileall -l "${PATH_DWA}"
+			cd "${PATH_DWA}"
+			#BIGSUR FIX
+			if [ -f "$PATH_DWA/runtime/lib/libz.1.dylib" ]; then
+				unlink "$PATH_DWA/runtime/lib/libz.1.dylib"
+			fi
+			export DYLD_LIBRARY_PATH=$PATH_DWA/runtime/lib
+			"${PATH_DWA}/runtime/bin/${EXE_NAME}" -m compileall -l "${PATH_DWA}"
 		fi
 	fi
 	return 0
 }
 
+check_update(){
+	PATH_DWA=$1
+	
+	if [ -d "${PATH_DWA}/update" ]; then
+		
+		#DETECT EXE NAME
+		EXE_NAME="$2"
+		if [ -z "$2" ]; then
+			EXE_NAME="dwagent"
+		fi
+		if [ ! -f "${PATH_DWA}/runtime/bin/${EXE_NAME}" ]; then
+			if [ -e "${PATH_DWA}/runtime/bin" ]; then
+				for file in "${PATH_DWA}/runtime/bin/"**
+				do
+					if [ -x "$file" ]; then
+						if [ -f "${PATH_DWA}/native/$(basename "$file")" ]; then
+							EXE_NAME="$(basename "$file")"
+						fi
+					fi
+				done
+			fi
+		fi
+		
+		#UPDATE updater.py
+		if [ -f "${PATH_DWA}/update/updater.py" ]; then
+			if [ -f "${PATH_DWA}/updater.py" ]; then
+				if ! rm -r -f "${PATH_DWA}/updater.py"; then
+					echo "Update updater.py error."
+					return 1
+				fi
+			fi
+			if ! mv "${PATH_DWA}/update/updater.py" "${PATH_DWA}/updater.py"; then
+				echo "Move updater.py error."
+				return 1
+			fi
+		fi
+		
+		#RUN updater.py
+		if [ -f "${PATH_DWA}/runtime/bin/${EXE_NAME}" ] && [ -f "${PATH_DWA}/updater.py" ]; then
+			if [ -f "${PATH_DWA}/updater.status" ]; then
+				if ! rm -r -f "${PATH_DWA}/updater.status"; then
+					echo "Remove updater.status error."
+					return 1
+				fi
+			fi
+			cd "${PATH_DWA}"
+			#BIGSUR FIX
+			if [ -f "$PATH_DWA/runtime/lib/libz.1.dylib" ]; then
+				unlink "$PATH_DWA/runtime/lib/libz.1.dylib"
+			fi
+			export DYLD_LIBRARY_PATH=$PATH_DWA/runtime/lib			
+			"${PATH_DWA}/runtime/bin/${EXE_NAME}" updater.py
+			if [ ! -f "${PATH_DWA}/updater.status" ] && [ -d "${PATH_DWA}/update" ]; then
+				rm -r -f "${PATH_DWA}/update"
+				echo "Failed run updater.py."
+				return 1			
+			fi
+		else
+			check_update_old "${PATH_DWA}" "${EXE_NAME}"
+		fi
+	fi
 
-
+}
