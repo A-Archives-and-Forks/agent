@@ -6,6 +6,7 @@
 
 #include "main.h"
 
+
 int DWASoundCaptureVersion(){
 	return 4;
 }
@@ -54,6 +55,17 @@ int getCurOutput(rtaudio* adc){
 			}
 		}else{
 			dvout=rtaudio_get_default_output_device(adc);
+		}
+	#elif defined OS_MAC
+		for (unsigned int i=0;i<=deviceCount-1;i++){
+			int did = i;
+			//int did = rtaudio_get_device_id(adc,i);
+			rtaudio_device_info_t di = rtaudio_get_device_info(adc,did);
+			if ((strcasestr(di.name,"blackhole")!=NULL) or (strcasestr(di.name,"soundflower")!=NULL)){
+				dvout=did;
+				//printf("DEV: %s\n", di.name);
+				break;
+			}
 		}
 	#else
 		dvout=rtaudio_get_default_output_device(adc);
