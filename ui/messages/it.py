@@ -13,13 +13,14 @@ data={
     'welcomeSecurity': u'Sicurezza\nA tutela della vostra privacy garantiamo che nessuna informazione verrà memorizzata sui nostri server e le comunicazioni sono criptate in modo che terze parti non possono leggerle.',
     'welcomeSoftwareUpdates': u'Aggiornamenti software\nGli aggiornamenti di questo software avvengono in modo automatico.',
     'welcomePrivacyTerms':u'Procedendo con l\'installazione o l\'esecuzione di questo software accetti i #TERMSANDCONDITIONS e la #PRIVACYPOLICY',
+    'welcomeTermsAndConditions':u'Selezionando l\'opzione \'{0}\' o \'{1}\' accetto i #TERMSANDCONDITIONS',
     'termsAndConditions': u'Termini e Condizioni',
     'privacyPolicy': u'Informativa sulla Privacy',
     'confirmUninstall': u'Vuoi eliminare DWAgent?',
     'mustAccept': u'Per poter continuare devi selezionare l\'opzione {0}',
     'or' : u'o',
     'accept': u'Accetta',
-    'decline': u'Non accetta', 
+    'decline': u'Non accetto', 
     'next': u'Successivo', 
     'back': u'Indietro', 
     'yes': u'Sì', 
@@ -170,6 +171,7 @@ data={
     'configureInstallNewAgent':u'Creando un nuovo agente',
     'configureInstallCode':u'Digitando il codice di installazione',
     'createNewAgent':u'Creazione dell\'agente in corso...',
+    'groupName':u'Nome gruppo',
     'agentName':u'Nome agente',
     'enterInstallNewAgent':u'Inserire i dati per creare un nuovo agente:',
     'configureInstallUser':u'Utente',
@@ -202,5 +204,6 @@ data={
     'accessConfirm': u'Desidera accedere al tuo dispositivo.',
     'unattendedAccess': u'Accesso\nnon presidiato',
     'unknownUser': u'Utente sconosciuto',
-    'skipCertValidation':u'Attenzione: Il certificato di sicurezza non può essere convalidato, se si procede la connessione potrebbe non essere sicura.\nSi prega di verificare la configurazione del router/firewall/antivirus di rete o locale.\nProcedere comunque?'
+    'skipCertValidation':u'Attenzione: Il certificato di sicurezza non può essere convalidato, se si procede la connessione potrebbe non essere sicura.\nSi prega di verificare la configurazione del router/firewall/antivirus di rete o locale.\nProcedere comunque?',
+    'installerNotSupported': u'Questo programma di installazione non è più supportato. Si prega di scaricare l\'ultima versione.'
 }

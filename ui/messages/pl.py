@@ -78,7 +78,7 @@ data={
     'error':u'Błąd',
     'errorAgentAlreadyExsists':u'Agent {0} już istnieje.',
     'errorAgentMax':u'Przekroczono maksymalną liczbę agentów.',
-    'errorAgentNameNotValid':u'Nazwa agenta nie jest prawidłowa. Nie możesz użyć znaków / \ | # @ : .',
+    'errorAgentNameNotValid':u'Nazwa agenta nie jest prawidłowa. Nie możesz użyć znaków / \\ | # @ : .',
     'errorConnectionConfig':u'Błąd połączenia. Proszę sprawdzić czy usługa DWAgent jest uruchomiona.',
     'errorConnectionQuestion':u'Błąd połączenia. Proszę sprawdzić połączenie internetowe lub konfigurację zapory.\nCzy chcesz skonfigurować proxy?',
     'errorInvalidCode':u'Wprowadzono błędny kod.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Instalacja usługi nie powiodła się.',
     'installShortcuts':u'Instalacja skrótów...',
     'installShortcutsErr':u'Instalacja skrótów nie powiodła się.',
+    'installerNotSupported':u'Ten instalator nie jest już obsługiwany. Pobierz najnowszą wersję.',
     'ipAddress':u'Adres IP: {0}',
     'linuxRootPrivileges':u'Potrzebujesz uprawnień administratora, aby zainstalować DWAgent.\nProszę rozpocząć skrypt używając użytkownika administracyjnego.',
     'menuConfigure':u'Konfiguruj',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'#TERMSANDCONDITIONSLINK, #PRIVACYPOLICYLINK - Instalując program wyrażasz na nie zgodę.',
     'welcomeSecurity':u'Bezpieczeństwo\nAby chronić Twoją prywatność, gwarantujemy, że żadne informacje nie będą gromadzone na naszych serwerach, a komunikacja jest szyfrowana, aby osoby trzecie nie mogły jej odczytać.',
     'welcomeSoftwareUpdates':u'Aktualizacje oprogramowania\nOprogramowanie aktualizuje się automatycznie.',
+    'welcomeTermsAndConditions':u'Wybierając opcję \'{0}\' lub \'{1}\' akceptuję #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Musisz mieć uprawnienia administratora, aby zainstalować DWAgent.\nProszę uruchomić plik wykonywalny z opcją \'uruchom jako administrator\'.',
     'yes':u'Tak'
 }

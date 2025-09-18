@@ -78,7 +78,7 @@ data={
     'error':u'Error',
     'errorAgentAlreadyExsists':u'L\'agent {0} ja existia',
     'errorAgentMax':u'Has excedit el nombre màxim d\'agents.',
-    'errorAgentNameNotValid':u'El nom de l\'agent no és vàlid. No pots pas fer servir els caracters / \ | # @ : .',
+    'errorAgentNameNotValid':u'El nom de l\'agent no és vàlid. No pots pas fer servir els caracters / \\ | # @ : .',
     'errorConnectionConfig':u'Error de connexió. Si et plau, verifica que el servei DWAgent sigui engegat.',
     'errorConnectionQuestion':u'Error de connexió. Si et plau, verifica que la connexió a internet o el tallafocs.\nVols configurar un servidor intermediari (proxy)?',
     'errorInvalidCode':u'El codi que has introduït no és vàlid.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Instal·lació del servei fallida.',
     'installShortcuts':u'Instal·lant dreceres...',
     'installShortcutsErr':u'Instal·lació de les dreceres fallida.',
+    'installerNotSupported':u'Aquest instal·lador ja no és compatible. Si us plau, descarregueu la darrera versió.',
     'ipAddress':u'Adreça IP: {0}',
     'linuxRootPrivileges':u'Hauries de tindre privilegis de root per instal·lar el DWAgent.\nSi et plau, reinicia l\'script amb l\'usuari root.',
     'menuConfigure':u'Configurar',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Si instal·leu o feu anar aquest programari vol dir que sou acceptant els #TERMSANDCONDITIONS i la #PRIVACYPOLICY',
     'welcomeSecurity':u'Seguretat\nPer tal de protegir la teva privacitat, et garantim que no emmagatzemarem pas informació teva dins dels nostres servidors; a més que les comunicacions són xifrades i, per tant, les aplicacions de tercers no poden pas llegir-ne res.',
     'welcomeSoftwareUpdates':u'Actualitzacions del programari\nAquest programari s\'actualitza automàticament.',
+    'welcomeTermsAndConditions':u'Triant les opcions \'{0}\' o \'{1}\', accepto els #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Has de tindre privilegis d\'administrador per tal d\'instal·lar el DWAgent.\nSi et plau, inicia l\'executable amb la opció "executar com a administrador".',
     'yes':u'Si'
 }

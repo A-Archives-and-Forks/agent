@@ -12,6 +12,8 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #import <Cocoa/Cocoa.h>
 #import <AppKit/AppKit.h>
 
+
+
 NSAutoreleasePool *pool=NULL;
 NSApplication *app=NULL;
 NSTimer *timer=NULL;
@@ -19,17 +21,37 @@ NSMutableArray *windowList=NULL;
 NSMutableArray *notifyIconList=NULL;
 NSMutableArray *imageList=NULL;
 JSONWriter jonextevent;
-NSInteger  appActPolicy=NSApplicationActivationPolicyRegular;
+NSInteger appActPolicy=NSApplicationActivationPolicyRegular;
 
-const int WINDOW_TYPE_NORMAL=0;
-const int WINDOW_TYPE_NORMAL_NOT_RESIZABLE=1;
+//const int WINDOW_TYPE_NORMAL=0;
+//const int WINDOW_TYPE_NORMAL_NOT_RESIZABLE=1;
 const int WINDOW_TYPE_DIALOG=100;
 const int WINDOW_TYPE_POPUP=200;
 const int WINDOW_TYPE_TOOL=300;
 
 typedef void (*CallbackEventMessage)(const wchar_t* msg);
 
-CallbackEventMessage g_callEventMessage;
+CallbackEventMessage g_callEventMessage=NULL;
+
+void callEventMessage(wstring msg){
+	if (![NSThread isMainThread]){
+		dispatch_async(dispatch_get_main_queue(), ^{		
+			g_callEventMessage(msg.c_str());
+		});
+	}else{
+		g_callEventMessage(msg.c_str());
+	}
+}
+
+void loopEventMessage() {
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+		if(g_callEventMessage!=NULL){
+			g_callEventMessage(NULL);
+			loopEventMessage();
+		}
+	});
+}
+
 
 NSString* wchartToNString(wchar_t* inStr){
 	if (NSHostByteOrder() == NS_LittleEndian){
@@ -58,7 +80,7 @@ void fireCallBackRepaint(int id, int x,int y,int w, int h){
 	jonextevent.addNumber(L"width", w);
 	jonextevent.addNumber(L"height", h);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());	
 }
 
 void fireCallBackKeyboard(int id,const wchar_t* type,const wchar_t* val,bool bshift){
@@ -73,7 +95,7 @@ void fireCallBackKeyboard(int id,const wchar_t* type,const wchar_t* val,bool bsh
 	jonextevent.addBoolean(L"alt", false);
 	jonextevent.addBoolean(L"command", false);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());
 }
 
 void fireCallBackMouse(int id,const wchar_t* action, int x, int y, int button){
@@ -86,7 +108,7 @@ void fireCallBackMouse(int id,const wchar_t* action, int x, int y, int button){
 	jonextevent.addNumber(L"y", y);
 	jonextevent.addNumber(L"button", button);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());
 }
 
 void fireCallBackWindow(int id, const wchar_t* action){
@@ -96,15 +118,11 @@ void fireCallBackWindow(int id, const wchar_t* action){
 	jonextevent.addString(L"action", action);
 	jonextevent.addNumber(L"id", id);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());
 }
 
-void fireCallBackTimer(){
-	g_callEventMessage(NULL);
-}
 
-@interface DWADelegate : NSObject <NSApplicationDelegate> {
-
+@interface DWADelegate : NSObject <NSApplicationDelegate>{
 }
 @end
 
@@ -112,17 +130,25 @@ void fireCallBackTimer(){
 
 
 - (void) applicationDidFinishLaunching:(NSNotification *)aNotification{
-
-	//TROVARE SOLUZIONE MIGLIORE
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-	NSImage *imgDock = [[NSImage alloc] initWithContentsOfFile:@"images/logo.icns"];
+	//FIND OTHER SOLUTION
+	/*dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+		NSImage *imgDock = [[NSImage alloc] initWithContentsOfFile:@"images/logo.icns"];
 		if (imgDock != nil){
 			if ([imgDock isValid]) {
 				[NSApp setApplicationIconImage: imgDock];
 			}
-			[imgDock release];
+			//[imgDock release];
 		}
-	});
+	});*/
+	
+
+	
+	//FIND OTHER SOLUTION
+	NSImage *imgDock = [[NSImage alloc] initWithContentsOfFile:@"images/logo.icns"];
+	if ((imgDock != nil) && ([imgDock isValid])){
+		[[NSApplication sharedApplication] setApplicationIconImage:imgDock];
+	}	
+		
 }
 
 @end
@@ -137,7 +163,7 @@ void fireCallBackTimer(){
 -(id)init
 {
    self = [super init];
-
+   return self;
 }
 
 - (BOOL) canBecomeKeyWindow { return true; }
@@ -153,7 +179,6 @@ void fireCallBackTimer(){
 	int y;
 	int h;
 	int w;
-	bool boolInit;
 	bool boolClipRect;
 }
 @end
@@ -163,7 +188,7 @@ void fireCallBackTimer(){
 {
    self = [super init];
    penColor=[NSColor blackColor];
-   boolInit=false;
+   //boolInit=false;
    boolClipRect=false;
    return self;
 }
@@ -188,9 +213,6 @@ void fireCallBackTimer(){
 
 - (void) setH : (int) p {  h = p; }
 - (int) h { return h; }
-
-- (void) setBoolInit : (bool) p {  boolInit = p; }
-- (bool) boolInit { return boolInit; }
 
 - (void) setBoolClipRect : (bool) p {  boolClipRect = p; }
 - (bool) boolClipRect { return boolClipRect; }
@@ -249,7 +271,7 @@ void removeWindowByID(int wid){
 	jonextevent.addString(L"action", L"ACTIVATE");
 	jonextevent.addNumber(L"id", wid);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());
 }
 - (void)rightMouseDown:(NSEvent *)theEvent{
 	jonextevent.clear();
@@ -258,7 +280,7 @@ void removeWindowByID(int wid){
 	jonextevent.addString(L"action", L"CONTEXTMENU");
 	jonextevent.addNumber(L"id", wid);
 	jonextevent.endObject();
-	g_callEventMessage(jonextevent.getString().c_str());
+	callEventMessage(jonextevent.getString());
 }
 - (void)dealloc {
     self.image = nil;
@@ -355,7 +377,9 @@ DWAImage* getImageByID(int wid){
 	int wid;
 	int h;
 	int w;
-	bool bfocus;
+	//bool bfocus;
+	bool bshow;
+	bool bdestroy;
 }
 -(void)drawRect:(NSRect)rect;
 @end
@@ -363,8 +387,10 @@ DWAImage* getImageByID(int wid){
 @implementation GView
 -(id)init
 {
-   self = [super init];
-   bfocus=false;
+   self = [super init];   
+   //bfocus=false;
+   self->bshow=false;
+   self->bdestroy=false;
    return self;
 }
 
@@ -379,20 +405,102 @@ DWAImage* getImageByID(int wid){
 
 -(void)drawRect:(NSRect)rect {
 	[[NSColor whiteColor] set];
-	NSRectFill( [self bounds] );
-	fireCallBackRepaint(wid,[self bounds].origin.x,[self bounds].origin.y,[self bounds].size.width,[self bounds].size.height);
+	NSRect irect = NSIntersectionRect([self bounds], rect);
+	NSRectFill(irect);
+	fireCallBackRepaint(wid,irect.origin.x,[self bounds].size.height-irect.origin.y-irect.size.height,irect.size.width,irect.size.height);
 }
 
 - (BOOL)acceptsFirstResponder {
     return YES;
 }
 
+- (BOOL)acceptsFirstMouse:(NSEvent *)theEvent {
+	return YES;
+}
+
+- (void)keyDown:(NSEvent *)theEvent {
+	//NSLog(@"keyDown");
+	NSUInteger keyCode = theEvent.keyCode;
+	NSUInteger modifierFlags = theEvent.modifierFlags;
+	bool bshift=false;
+	if (modifierFlags & NSEventModifierFlagShift) {
+		bshift=true;
+	}
+	if (keyCode == 126) {
+		fireCallBackKeyboard(wid,L"KEY",L"UP",bshift);
+	} else if (keyCode == 125) {
+		fireCallBackKeyboard(wid,L"KEY",L"DOWN",bshift);
+	} else if (keyCode == 123) {
+		fireCallBackKeyboard(wid,L"KEY",L"LEFT",bshift);
+	} else if (keyCode == 124) {
+		fireCallBackKeyboard(wid,L"KEY",L"RIGHT",bshift);
+	} else if (keyCode == 51) {
+		fireCallBackKeyboard(wid,L"KEY",L"BACKSPACE",bshift);
+	} else if (keyCode == 117) {
+		fireCallBackKeyboard(wid,L"KEY",L"DELETE",bshift);
+	} else if (keyCode == 36) {
+		fireCallBackKeyboard(wid,L"KEY",L"RETURN",bshift);
+	} else if (keyCode == 48) {
+		fireCallBackKeyboard(wid,L"KEY",L"TAB",bshift);
+	} else if (keyCode == 122) {
+		fireCallBackKeyboard(wid,L"KEY",L"F1",bshift);
+	} else if (keyCode == 120) {
+		fireCallBackKeyboard(wid,L"KEY",L"F2",bshift);
+	} else if (keyCode == 99) {
+		fireCallBackKeyboard(wid,L"KEY",L"F3",bshift);
+	} else if (keyCode == 118) {
+		fireCallBackKeyboard(wid,L"KEY",L"F4",bshift);
+	} else if (keyCode == 96) {
+		fireCallBackKeyboard(wid,L"KEY",L"F5",bshift);
+	} else if (keyCode == 97) {
+		fireCallBackKeyboard(wid,L"KEY",L"F6",bshift);
+	} else if (keyCode == 98) {
+		fireCallBackKeyboard(wid,L"KEY",L"F7",bshift);
+	} else if (keyCode == 100) {
+		fireCallBackKeyboard(wid,L"KEY",L"F8",bshift);
+	} else if (keyCode == 101) {
+		fireCallBackKeyboard(wid,L"KEY",L"F9",bshift);
+	} else if (keyCode == 109) {
+		fireCallBackKeyboard(wid,L"KEY",L"F10",bshift);
+	} else if (keyCode == 103) {
+		fireCallBackKeyboard(wid,L"KEY",L"F11",bshift);
+	} else if (keyCode == 111) {
+		fireCallBackKeyboard(wid,L"KEY",L"F12",bshift);
+	} else if (keyCode == 116) {
+		//Page Up key pressed
+	} else if (keyCode == 121) {
+		//Page Down key pressed
+	} else if (keyCode == 115) {
+		//Home key pressed
+	} else if (keyCode == 119) {
+		//End key pressed
+	} else if (keyCode == 118) {
+		//??
+	} else if (keyCode == 114) {
+		//Insert key pressed
+	} else if (keyCode == 105) {
+		//Stamp key pressed
+	}else{	
+		NSString *characters = theEvent.characters;
+		unichar firstChar = [characters characterAtIndex:0];	
+		if (isprint(firstChar)){			
+			//NSLog(@"KeyCode %d",keyCode);			
+			wchar_t *wideChar = (wchar_t *)malloc(2 * sizeof(wchar_t));
+			wideChar[0] = (wchar_t)firstChar;
+			wideChar[1] = L'\0';
+			fireCallBackKeyboard(wid,L"CHAR",wideChar,false);
+			free(wideChar);
+		}
+	}
+}
+
+
+/*
 
 - (void)keyDown:(NSEvent *)theEvent {
 	[self interpretKeyEvents:[NSArray arrayWithObject:theEvent]];
-	//NSLog(@"keyDown");
 }
-
+ 
 - (void)insertText:(id)string{
     [super insertText:string];
     int n = [string length];
@@ -404,6 +512,7 @@ DWAImage* getImageByID(int wid){
     	fireCallBackKeyboard(wid,L"CHAR",buffer,false);
     }
 }
+
 
 -(IBAction)insertTab:(id)sender{
 	fireCallBackKeyboard(wid,L"KEY",L"TAB",false);
@@ -452,6 +561,7 @@ DWAImage* getImageByID(int wid){
 -(IBAction)moveToEndOfLineAndModifySelection:(id)sender{
 	fireCallBackKeyboard(wid,L"KEY",L"END",true);
 }
+*/
 
 - (void)mouseMoved:(NSEvent *)theEvent {
 	NSPoint p = [theEvent locationInWindow];
@@ -496,6 +606,7 @@ DWAImage* getImageByID(int wid){
 	}
 }
 
+
 - (BOOL)canBecomeKeyWindow {
     return YES;
 }
@@ -504,16 +615,23 @@ DWAImage* getImageByID(int wid){
     return YES;
 }
 
+
 -(void)windowDidBecomeMain:(NSNotification *)note {
-	[self gotFocus];
+	if (!self->bdestroy){
+		dispatch_async(dispatch_get_main_queue(), ^{
+			if (self.window.isVisible && self->bshow==false){
+				[self.window orderOut:nil];
+			}
+		});
+	}
+}
+
+-(void)windowDidResignMain:(NSNotification *)note {
+
 }
 
 -(void)windowDidBecomeKey:(NSNotification *)note {
 	[self gotFocus];
-}
-
--(void)windowDidResignMain:(NSNotification *)note {
-	[self lostFocus];
 }
 
 -(void)windowDidResignKey:(NSNotification *)note {
@@ -521,27 +639,47 @@ DWAImage* getImageByID(int wid){
 }
 
 -(void)gotFocus{
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-		if (!bfocus){
-			//NSLog(@"GOT FOCUS %d",wid);
-			fireCallBackWindow(wid,L"ACTIVE");
-		}
-		bfocus=true;
-	});
+	if (!self->bdestroy){
+		//NSLog(@"GOT FOCUS %d",wid);
+		fireCallBackWindow(wid,L"ACTIVE");
+	}
 }
 
 -(void)lostFocus{
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-		if (bfocus){
-			//NSLog(@"LOST FOCUS %d",wid);
-			fireCallBackWindow(wid,L"INACTIVE");
-		}
-		bfocus=false;
+	if (!self->bdestroy){
+		//NSLog(@"LOST FOCUS %d",wid);
+		fireCallBackWindow(wid,L"INACTIVE");
+	}
+}
+
+-(void)showWindow{
+	self->bshow=true;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.window makeKeyAndOrderFront:nil];
 	});
 }
+
+-(void)toFrontWindow{	
+	self->bshow=true;
+	dispatch_async(dispatch_get_main_queue(), ^{
+		[self.window makeKeyAndOrderFront:nil];		
+		[[NSRunningApplication currentApplication] activateWithOptions:(NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps)];
+	});
+}
+
+-(void)hideWindow{
+	self->bshow=false;
+	[self.window orderOut:nil];
+}
+		
+-(void)destroyWindow{
+	self->bdestroy=true;
+	[self.window close];
+}
+
 @end
 
-
+/*
 @interface DWATimer:NSObject{
 
 }
@@ -554,9 +692,10 @@ DWAImage* getImageByID(int wid){
 }
 
 -(void)onTick:(NSTimer*)timer{
-	fireCallBackTimer();
+	callEventMessage(NULL);
 }
 @end
+*/
 
 extern "C" void DWAGDINSAppSetActivationPolicy(int v){
 	if (v==1){
@@ -582,13 +721,18 @@ extern "C" void DWAGDILoop(CallbackEventMessage callback){
 		app = [NSApplication sharedApplication];
 		[NSApp setDelegate:[[DWADelegate alloc] init]];
 
-		timer = [NSTimer scheduledTimerWithTimeInterval: 0.1
+		/*timer = [NSTimer scheduledTimerWithTimeInterval: 0.1
 				 target: [DWATimer new]
 				 selector: @selector(onTick:)
 				 userInfo: nil
-				 repeats: YES];
+				 repeats: YES];*/
+		
 
-		[NSApp setActivationPolicy:appActPolicy];
+		//[NSApp setActivationPolicy:appActPolicy];		
+		NSApplicationActivationPolicy policy = (NSApplicationActivationPolicy)appActPolicy;
+		[NSApp setActivationPolicy:policy];
+
+		
 		[NSApp activateIgnoringOtherApps:YES];
 
 		id menubar = [[NSMenu new] autorelease];
@@ -607,12 +751,22 @@ extern "C" void DWAGDILoop(CallbackEventMessage callback){
 
 	g_callEventMessage=callback;
 	g_callEventMessage(NULL);
+	loopEventMessage();
+	
 	[app run];
+	
+	if (![NSThread isMainThread]){
+		dispatch_sync(dispatch_get_main_queue(), ^{		
+			g_callEventMessage=NULL;
+		});
+	}else{
+		g_callEventMessage=NULL;
+	}
 	[pool release];
 }
 
 extern "C" void DWAGDIEndLoop(){
-
+	
 }
 
 extern "C" void DWAGDICreateNotifyIcon(int wid,wchar_t* iconPath,wchar_t* toolTip){
@@ -674,7 +828,7 @@ extern "C" void DWAGDILoadImage(int wid, wchar_t* fname, int* size){
 	NSImage *image = [[NSImage alloc] initWithContentsOfFile:wchartToNString(fname)];
 	[dwa setWid:wid];
 	[dwa setImage:image];
-	NSBitmapImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
+	NSImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
 	size[0] = bitmapImageRep.pixelsWide;
 	size[1] = bitmapImageRep.pixelsHigh;
 }
@@ -697,7 +851,7 @@ extern "C" void DWAGDIDrawImage(int wid, int imgid, int x, int y){
 	DWAImage* dwaimg = getImageByID(imgid);
 	if ((dwa!=NULL) && (dwaimg!=NULL)){
 		NSImage *image =[dwaimg image];
-		NSBitmapImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
+		NSImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
 		int w=bitmapImageRep.pixelsWide;
 		int h=bitmapImageRep.pixelsHigh;
 		NSRect imageRect = NSMakeRect(x,dwa.h-h-y,w,h);
@@ -728,12 +882,26 @@ extern "C" void DWAGDINewWindow(int wid, int tp,int x, int y, int w, int h, wcha
 	if (tp==WINDOW_TYPE_POPUP){
 		[window setLevel: NSPopUpMenuWindowLevel];
 	}
-
-	DWAWindow* ww=addWindow(window, wid);
-	[ww setX:x];
-	[ww setY:y];
-	[ww setW:w];
-	[ww setH:h];
+	
+	
+	DWAWindow* dwa=addWindow(window, wid);
+	[dwa setX:x];
+	[dwa setY:y];
+	[dwa setW:w];
+	[dwa setH:h];
+	
+	
+	//dwa.boolInit=true;
+	GView *view = [[[GView alloc] initWithFrame:frame] autorelease];
+	[view setWid:wid];
+	[view setW:[dwa w]];
+	[view setH:[dwa h]];	
+	[window setContentView:view];
+	[window setDelegate:view];
+	[window setAcceptsMouseMovedEvents:YES];
+	[window contentView]; //FORCE LOADING
+	[window orderOut:nil];	
+	[window setOrderedIndex:0];
 }
 
 extern "C" void DWAGDIPosSizeWindow(int wid,int x, int y, int w, int h){
@@ -744,11 +912,11 @@ extern "C" void DWAGDIPosSizeWindow(int wid,int x, int y, int w, int h){
 		[dwa setY:y];
 		[dwa setW:w];
 		[dwa setH:h];
-		if (dwa.boolInit){
-			GView *view = [window contentView];
-			[view setW:w];
-			[view setH:h];
-		}
+		//if (dwa.boolInit){
+		GView *view = [window contentView];
+		[view setW:w];
+		[view setH:h];
+		//}
 		NSRect sr = [[NSScreen mainScreen] frame];
 		NSRect svr = [[NSScreen mainScreen] visibleFrame];
 		NSPoint pos;
@@ -767,7 +935,9 @@ extern "C" void DWAGDIDestroyWindow(int wid){
 	DWAWindow* dwa = getWindowByID(wid);
 	if (dwa!=NULL){
 		NSWindow *window = [dwa win];
-		[window close];
+		GView *view = [window contentView];
+		[view destroyWindow];
+		//[window close];
 	}
 }
 
@@ -784,23 +954,8 @@ extern "C" void DWAGDIShow(int wid,int mode){
 	DWAWindow* dwa = getWindowByID(wid);
 	if (dwa!=NULL){
 		NSWindow *window = [dwa win];
-		NSRect frame = [window frame];
-		//[[window windowController] setShouldCascadeWindows:true];
 		GView *view = [window contentView];
-		if (!dwa.boolInit){
-			dwa.boolInit=true;
-			view = [[[GView alloc] initWithFrame:frame] autorelease];
-			[view setWid:wid];
-			[view setW:[dwa w]];
-			[view setH:[dwa h]];
-			[window setContentView:view];
-			[window setDelegate:view];
-			[window setAcceptsMouseMovedEvents:YES];
-			[window makeKeyAndOrderFront:nil];
-			[window setOrderedIndex:0];
-		}else{
-			[window makeKeyAndOrderFront:nil];
-		}
+		[view showWindow];
 	}
 }
 
@@ -808,7 +963,8 @@ extern "C" void DWAGDIHide(int wid){
 	DWAWindow* dwa = getWindowByID(wid);
 	if (dwa!=NULL){
 		NSWindow *window = [dwa win];
-		[window orderOut:[window contentView]];
+		GView *view = [window contentView];
+		[view hideWindow];
 	}
 }
 
@@ -816,9 +972,8 @@ extern "C" void DWAGDIToFront(int wid){
 	DWAWindow* dwa = getWindowByID(wid);
 	if (dwa!=NULL){
 		NSWindow *window = [dwa win];
-		//GView *view = [window contentView];
-		[window makeKeyAndOrderFront:nil];
-		[[NSRunningApplication currentApplication] activateWithOptions:(NSApplicationActivateAllWindows | NSApplicationActivateIgnoringOtherApps)];
+		GView *view = [window contentView];
+		[view toFrontWindow];
 	}
 }
 
@@ -839,8 +994,8 @@ extern "C" void DWAGDIDrawLine(int wid, int x1,int y1,int x2,int y2){
 		[[NSGraphicsContext currentContext] setShouldAntialias: NO];
 		//NSWindow *window = [dwa win];
 		[[dwa penColor] set];
-		NSPoint p1 = NSMakePoint(x1,dwa.h-y1-1);
-		NSPoint p2 = NSMakePoint(x2,dwa.h-y2-1);
+		NSPoint p1 = NSMakePoint(x1+0.5,dwa.h-y1-0.5);
+		NSPoint p2 = NSMakePoint(x2+0.5,dwa.h-y2-0.5);
 		NSBezierPath* bp = [NSBezierPath bezierPath];
 		[bp setLineWidth:1];
 		[bp moveToPoint:p1];
@@ -854,7 +1009,7 @@ extern "C" void DWAGDIDrawEllipse(int wid, int x, int y, int w,int h){
 	if (dwa!=NULL){
 		[[NSGraphicsContext currentContext] setShouldAntialias: YES];
 		[[dwa penColor] setStroke];
-		NSRect rect = NSMakeRect(x, dwa.h-h-y, w, h);
+		NSRect rect = NSMakeRect(x+0.5, dwa.h-h-y-0.5, w, h);
 		NSBezierPath* circlePath = [NSBezierPath bezierPath];
 		[circlePath appendBezierPathWithOvalInRect: rect];
 		[circlePath stroke];
@@ -867,7 +1022,7 @@ extern "C" void DWAGDIFillEllipse(int wid, int x, int y, int w,int h){
 		[[NSGraphicsContext currentContext] setShouldAntialias: YES];
 		[[dwa penColor] setStroke];
 		[[dwa penColor] setFill];
-		NSRect rect = NSMakeRect(x, dwa.h-h-y, w, h);
+		NSRect rect = NSMakeRect(x+0.5, dwa.h-h-y-0.5, w, h);
 		NSBezierPath* circlePath = [NSBezierPath bezierPath];
 		[circlePath appendBezierPathWithOvalInRect: rect];
 		[circlePath stroke];
@@ -900,7 +1055,12 @@ extern "C" void DWAGDIDrawText(int wid, int fntid, wchar_t* str, int x, int y){
 		[[NSGraphicsContext currentContext] setShouldAntialias: YES];
 		//NSWindow *window = [dwa win];
 		NSFont* fnt = [NSFont menuBarFontOfSize:0];
-		NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:fnt, NSFontAttributeName,[dwa penColor], NSForegroundColorAttributeName, nil];
+		//NSDictionary *attributes = [NSDictionary dictionaryWithObjectsAndKeys:fnt, NSFontAttributeName,[dwa penColor], NSForegroundColorAttributeName, nil];
+		NSDictionary *attributes = @{
+				    NSFontAttributeName: fnt,
+				    NSForegroundColorAttributeName: [dwa penColor],
+				    NSWritingDirectionAttributeName: @[@(NSWritingDirectionLeftToRight | NSWritingDirectionOverride)]
+				};
 		NSString* nsStr = wchartToNString(str);
 		NSAttributedString * currentText=[[NSAttributedString alloc] initWithString:nsStr attributes: attributes];
 		[currentText drawAtPoint:NSMakePoint(x, dwa.h-(y+fnt.ascender+2))];
@@ -959,7 +1119,7 @@ extern "C" void DWAGDIGetScreenSize(int* size){
 
 extern "C" void DWAGDIGetImageSize(wchar_t* fname, int* size){
 	NSImage *image = [[NSImage alloc] initWithContentsOfFile:wchartToNString(fname)];
-	NSBitmapImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
+	NSImageRep* bitmapImageRep = [[image representations] objectAtIndex:0];
 	size[0] = bitmapImageRep.pixelsWide;
 	size[1] = bitmapImageRep.pixelsHigh;
 	[image release];
@@ -981,6 +1141,5 @@ extern "C" void DWAGDISetClipboardText(wchar_t* str){
 extern "C" wchar_t* DWAGDIGetClipboardText(){
 	return NULL;
 }
-
 
 #endif

@@ -9,6 +9,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 CallbackEventMessage g_callEventMessage;
 bool bclose=false;
+bool isWindowsXPOrEarlier=false;
 JSONWriter jonextevent;
 
 #define TRAYICONID	1
@@ -948,8 +949,18 @@ void DWAGDIDrawText(int id, int fntid, wchar_t* str, int x, int y){
 		rec.left=x;
 		rec.top=y;
 		rec.right=0;
-		rec.bottom=0;	
-		DrawTextExW(dwawin->hdc,str,-1,&rec,DT_LEFT | DT_NOCLIP,NULL);
+		rec.bottom=0;
+		size_t nlen = wcslen(str);
+		if (isWindowsXPOrEarlier){
+			DrawTextExW(dwawin->hdc,str,-1,&rec,DT_LEFT | DT_NOCLIP,NULL);
+		}else{
+			//FORCE LTR
+			wchar_t* nstr = new wchar_t[nlen + 2];
+			nstr[0] = L'\u202D';
+			wcscpy(nstr+1, str);
+			DrawTextExW(dwawin->hdc,nstr,-1,&rec,DT_LEFT | DT_NOCLIP,NULL);
+			delete[] nstr;
+		}
 	}
 }
 
@@ -1103,6 +1114,17 @@ void DWAGDIDrawImage(int id, int imgid, int x, int y){
 
 void DWAGDILoop(CallbackEventMessage callback){
 	bclose=false;
+
+	//CHECK IF XP or Earlier
+	OSVERSIONINFO osvi;
+	ZeroMemory(&osvi, sizeof(OSVERSIONINFO));
+	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+	if (GetVersionEx(&osvi)){
+	    if (osvi.dwMajorVersion < 6){
+	    	isWindowsXPOrEarlier=true;
+	    }
+	}
+
 	g_callEventMessage = callback;
 	g_callEventMessage(NULL);
 	MSG Msg;

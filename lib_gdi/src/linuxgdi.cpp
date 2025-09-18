@@ -16,10 +16,12 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include <X11/xpm.h>
 #include <X11/XKBlib.h>
 #include <X11/keysym.h>
+#include <X11/Xft/Xft.h>
 #include <wchar.h>
 #include <locale.h>
 #include <sys/timeb.h>
 #include <vector>
+#include <map>
 
 #define SYSTEM_TRAY_REQUEST_DOCK   0
 #define SYSTEM_TRAY_BEGIN_MESSAGE   1
@@ -28,7 +30,8 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 CallbackEventMessage g_callEventMessage;
 JSONWriter jonextevent;
 bool exitloop=false;
-Display * display;
+Display* display;
+Visual* visual;
 int screenid;
 Screen* screen;
 Window root;
@@ -40,6 +43,8 @@ int x11_fd;
 fd_set in_fds;
 struct timeval tv;
 Colormap colormap;
+std::map<FcChar32, FcChar32> charToFontHash;
+std::map<FcChar32, XftFont*> hashToFont;
 
 struct DWAWindow {
 	int id;
@@ -48,8 +53,11 @@ struct DWAWindow {
 	GC gc;
 	unsigned long curcol;
 	Pixmap dblbuffer;
+	XftDraw* xtfdraw;
+	XftColor* xtfcolor;
 	int x;
 	int y;
+	int penWidth;
 };
 std::vector<DWAWindow*> windowList;
 
@@ -65,6 +73,7 @@ std::vector<DWANotifyIcon*> notifyIconList;
 
 struct DWAFont {
 	int id;
+	int type; //0=fontset; 1=xft
 	XFontSet fontset;
 	int fontascent;
 	int fontheight;
@@ -77,7 +86,6 @@ struct DWAImage {
 };
 std::vector<DWAImage*> imageList;
 
-
 DWAWindow* addWindow(int id, Window win,GC gc,XIC ic){
 	DWAWindow* ww = new DWAWindow();
 	ww->id=id;
@@ -86,6 +94,9 @@ DWAWindow* addWindow(int id, Window win,GC gc,XIC ic){
 	ww->gc=gc;
 	ww->x=0;
 	ww->y=0;
+	ww->penWidth=1;
+	ww->xtfdraw=NULL;
+	ww->xtfcolor=NULL;
 	windowList.push_back(ww);
 	return ww;
 }
@@ -94,6 +105,15 @@ void removeWindowByHandle(Window win){
 	for (unsigned int i=0;i<windowList.size();i++){
 		DWAWindow* app = windowList.at(i);
 		if (app->win==win){
+			if (app->xtfdraw!=NULL){
+				XftDrawDestroy(app->xtfdraw);
+				app->xtfdraw=NULL;
+			}
+			if (app->xtfcolor!=NULL){
+				XftColorFree(display, visual, colormap, app->xtfcolor);
+				delete app->xtfcolor;
+				app->xtfcolor=NULL;
+			}
 			windowList.erase(windowList.begin()+i);
 			delete app;
 			break;
@@ -265,16 +285,107 @@ void DWAGDIUnloadFont(int id){
 	for (unsigned int i=0;i<fontList.size();i++){
 		DWAFont* dwf = fontList.at(i);
 		if (dwf->id==id){
-			XFreeFontSet(display, dwf->fontset);
+			if (dwf->type==0){
+				XFreeFontSet(display, dwf->fontset);
+			}
 			fontList.erase(fontList.begin()+i);
 			delete dwf;
 			break;
 		}
 	}
+
 }
 
-void DWAGDILoadFont(int id, wchar_t* name){
-	DWAFont* dwf = addFont(id);
+std::vector<FcChar32> wcharToUcs4(const wchar_t* wstr) {
+   std::vector<FcChar32> result;
+   if (!wstr) return result;
+   size_t len = wcslen(wstr);
+   for (size_t i = 0; i < len; i++) {
+	   wchar_t wch = wstr[i];
+	   //UTF-16
+	   if (sizeof(wchar_t) == 2) {
+		   if (wch >= 0xD800 && wch <= 0xDBFF && i + 1 < len) {
+			   wchar_t low = wstr[i + 1];
+			   if (low >= 0xDC00 && low <= 0xDFFF) {
+				   FcChar32 codepoint = 0x10000 + ((wch & 0x3FF) << 10) + (low & 0x3FF);
+				   result.push_back(codepoint);
+				   i++;
+				   continue;
+			   }
+		   }
+		   else if (wch >= 0xDC00 && wch <= 0xDFFF) {
+			   continue;
+		   }
+	   }
+	   result.push_back(static_cast<FcChar32>(wch));
+   }
+   return result;
+}
+
+XftFont* findXtfFontbyChar(FcChar32 ucs4chars, int size=11) {
+
+	std::map<FcChar32, FcChar32>::iterator charIt = charToFontHash.find(ucs4chars);
+	if (charIt != charToFontHash.end()) {
+	    FcChar32 hash = charIt->second;
+	    return hashToFont[hash];
+	}
+
+	FcPattern* pattern = FcPatternCreate();
+	FcPattern* matched;
+	FcResult result;
+	FcPatternAddString(pattern, FC_FAMILY, (const FcChar8*)"sans-serif");
+	FcPatternAddInteger(pattern, FC_SIZE, size);
+	FcPatternAddDouble(pattern, FC_DPI, 96.0);
+
+	FcCharSet* charset = FcCharSetCreate();
+	FcCharSetAddChar(charset, ucs4chars);
+	FcPatternAddCharSet(pattern, FC_CHARSET, charset);
+
+	FcPatternAddBool(pattern, FC_SCALABLE, FcTrue);
+	FcPatternAddBool(pattern, FC_ANTIALIAS, FcTrue);
+	FcPatternAddInteger(pattern, FC_HINT_STYLE, FC_HINT_FULL);
+
+	FcConfigSubstitute(NULL, pattern, FcMatchPattern);
+	FcDefaultSubstitute(pattern);
+	matched = FcFontMatch(NULL, pattern, &result);
+	XftFont* font = NULL;
+	if (matched) {
+		FcChar32 hash = FcPatternHash(matched);
+		std::map<FcChar32, XftFont*>::iterator fontIt = hashToFont.find(hash);
+		if (fontIt != hashToFont.end()) {
+			charToFontHash[ucs4chars] = hash;
+			FcPatternDestroy(matched);
+			font = fontIt->second;
+		} else {
+			font = XftFontOpenPattern(display, matched);
+			if (font) {
+				hashToFont[hash] = font;
+				charToFontHash[ucs4chars] = hash;
+			}else{
+				FcPatternDestroy(matched);
+			}
+		}
+	}
+	FcCharSetDestroy(charset);
+	FcPatternDestroy(pattern);
+	return font;
+}
+
+bool loadFontType1(DWAFont* dwf, wchar_t* name){
+	dwf->type=1;
+	if (!XftInit(NULL)) {
+		return false;
+	}
+	std::vector<FcChar32> ucs4chars = wcharToUcs4(name); //Can I use any text
+	XftFont* font = findXtfFontbyChar(ucs4chars[0]);
+	dwf->fontascent=font->ascent;
+	dwf->fontheight=font->height;
+	return true;
+}
+
+
+bool loadFontType0(DWAFont* dwf,wchar_t* name){
+	dwf->type=0;
 	int nmissing;
 	char **missing;
 	char *def_string;
@@ -322,6 +433,14 @@ void DWAGDILoadFont(int id, wchar_t* name){
 		if (dwf->fontascent < fonts[j]->ascent) dwf->fontascent = fonts[j]->ascent;
 		if (dwf->fontheight < fonts[j]->ascent+fonts[j]->descent) dwf->fontheight = fonts[j]->ascent+fonts[j]->descent;
 	}
+	return true;
+}
+
+void DWAGDILoadFont(int id, wchar_t* name){
+	DWAFont* dwf = addFont(id);
+	if (!loadFontType1(dwf,name)){
+		loadFontType0(dwf,name);
+	}
 }
 
 void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPath){
@@ -331,14 +450,12 @@ void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPat
 
 	XSetWindowAttributes attributes;
 	attributes.background_pixel = XWhitePixel(display,screenid);
-	Visual *visual = DefaultVisual(display,screenid);
+	visual = DefaultVisual(display,screenid);
 	int depth  = DefaultDepth(display,screenid);
-	appwin = XCreateWindow(display,root,
-		                            x, y, w, h, 0, depth,  InputOutput,
-		                            visual ,CWBackPixel, &attributes);
+	appwin = XCreateWindow(display,root,x, y, w, h, 0,depth,InputOutput,visual,CWBackPixel,&attributes);
 
 
-	//Previene chiusura browser da bottone
+	//PREVENT CLOSE BY X BUTTON
     XSetWMProtocols(display, appwin, &wm_delete_window, 1);
 
 	appgc = XCreateGC(display, appwin, 0, 0);
@@ -352,21 +469,35 @@ void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPat
 		XFree(sh);
 	}
 
+	bool bhidetaskbar=false;
 	if (tp==WINDOW_TYPE_TOOL){
 		Atom key = XInternAtom(display, "_NET_WM_WINDOW_TYPE", True);
 		Atom val= XInternAtom(display, "_NET_WM_WINDOW_TYPE_MENU", True);
 		XChangeProperty(display, appwin, key, XA_ATOM, 32, PropModeReplace, (unsigned char*)&val,  1);
+		bhidetaskbar=true;
 	}else if (tp==WINDOW_TYPE_DIALOG){
 		Atom key = XInternAtom(display, "_NET_WM_WINDOW_TYPE", True);
 		Atom val= XInternAtom(display, "_NET_WM_WINDOW_TYPE_DIALOG", True);
 		XChangeProperty(display, appwin, key, XA_ATOM, 32, PropModeReplace, (unsigned char*)&val,  1);
+		bhidetaskbar=true;
 	}else if (tp==WINDOW_TYPE_POPUP){
 		Atom key = XInternAtom(display, "_NET_WM_WINDOW_TYPE", True);
 		Atom val = XInternAtom(display, "_NET_WM_WINDOW_TYPE_DOCK", True);
 		XChangeProperty(display, appwin, key, XA_ATOM, 32, PropModeReplace, (unsigned char*)&val,  1);
+		bhidetaskbar=true;
    	}
 
-		//CARICA ICONA
+	if (bhidetaskbar){
+		Atom wmState = XInternAtom(display, "_NET_WM_STATE", False);
+		Atom states[4];
+		states[0] = XInternAtom(display, "_NET_WM_STATE_SKIP_TASKBAR", False);
+		states[1] = XInternAtom(display, "_NET_WM_STATE_SKIP_PAGER", False);
+		states[2] = XInternAtom(display, "_NET_WM_STATE_ABOVE", False);
+		states[3] = XInternAtom(display, "_NET_WM_STATE_STICKY", False);
+		XChangeProperty(display, appwin, wmState, XA_ATOM, 32, PropModeReplace, (unsigned char*)&states, 4);
+	}
+
+	//LOAD ICON
 	if (iconPath != NULL){
 		unsigned long *buffer = NULL;
 		int length = 0;
@@ -397,15 +528,25 @@ void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPat
 		}
 	}
 
+	/*
 	DWAFont* dwf = fontList.at(0);
 	XVaNestedList list = XVaCreateNestedList(0,XNFontSet,dwf->fontset,NULL);
-   	appic = XCreateIC(im,
+	appic = XCreateIC(im,
 				   XNInputStyle, best_style,
 				   XNClientWindow, appwin,
 				   XNPreeditAttributes, list,
 				   XNStatusAttributes, list,
 				   NULL);
 	XFree(list);
+	*/
+
+	appic = XCreateIC(im,
+				   XNInputStyle,
+				   XIMPreeditNothing | XIMStatusNothing,
+				   XNClientWindow, appwin,
+				   XNFocusWindow, appwin,
+				   NULL);
+
 
 	long im_event_mask=0;
 	if (appic != NULL) {
@@ -416,7 +557,7 @@ void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPat
 				| ButtonPressMask | ButtonReleaseMask | KeyPressMask | KeyReleaseMask
 				| FocusChangeMask | VisibilityChangeMask| im_event_mask);
 
-	DWAWindow* dwa = addWindow(id, appwin,appgc,appic);
+	DWAWindow* dwa = addWindow(id, appwin,appgc, appic);
 	XWindowAttributes wa;
 	XGetWindowAttributes(display, appwin, &wa);
 	dwa->dblbuffer = XCreatePixmap(display, appwin, wa.width, wa.height, wa.depth);
@@ -428,6 +569,10 @@ void DWAGDIPosSizeWindow(int id,int x, int y, int w, int h){
 	DWAWindow* dwa = getWindowByID(id);
 	if (dwa!=NULL){
 		XFreePixmap(display, dwa->dblbuffer);
+		if (dwa->xtfdraw!=NULL){
+			XftDrawDestroy(dwa->xtfdraw);
+			dwa->xtfdraw=NULL;
+		}
 		XWindowAttributes wa;
 		XGetWindowAttributes(display, dwa->win, &wa);
 		dwa->dblbuffer = XCreatePixmap(display, dwa->win, w, h, wa.depth);
@@ -446,6 +591,10 @@ void DWAGDIDestroyWindow(int id){
 		XDestroyIC(xic);
 		XDestroyWindow(display,ww);
 		XFreePixmap(display, dwa->dblbuffer);
+		if (dwa->xtfdraw!=NULL){
+			XftDrawDestroy(dwa->xtfdraw);
+			dwa->xtfdraw=NULL;
+		}
 	}
 }
 
@@ -498,16 +647,36 @@ void DWAGDIPenColor(int id, int r, int g, int b){
 	DWAWindow* dwa = getWindowByID(id);
 	if (dwa!=NULL){
 		dwa->curcol = r << 16 | g << 8 | b << 0;
+		if (dwa->xtfcolor!=NULL){
+			XftColorFree(display, visual, colormap, dwa->xtfcolor);
+			delete dwa->xtfcolor;
+			dwa->xtfcolor=NULL;
+		}
+		XRenderColor render_color;
+		render_color.red = (r << 8) | (unsigned char)r;
+		render_color.green = (g << 8) | (unsigned char)g;
+		render_color.blue = (b << 8) | (unsigned char)b;
+		render_color.alpha = 0xffff;
+		dwa->xtfcolor=new XftColor;
+		if (!XftColorAllocValue(display, visual, colormap, &render_color, dwa->xtfcolor)) {
+			delete dwa->xtfcolor;
+			dwa->xtfcolor=NULL;
+		}
+
 	}
 }
 
 void DWAGDIPenWidth(int id, int w){
-
+	DWAWindow* dwa = getWindowByID(id);
+	if (dwa!=NULL){
+		dwa->penWidth=w;
+	}
 }
 
 void DWAGDIDrawLine(int id, int x1,int y1,int x2,int y2){
 	DWAWindow* dwa = getWindowByID(id);
 	if (dwa!=NULL){
+		XSetLineAttributes(display, dwa->gc, dwa->penWidth, LineSolid, CapButt, JoinMiter);
 		XSetForeground(display,  dwa->gc, dwa->curcol);
 		XDrawLine(display, dwa->dblbuffer, dwa->gc, x1, y1, x2, y2);
 	}
@@ -516,6 +685,7 @@ void DWAGDIDrawLine(int id, int x1,int y1,int x2,int y2){
 void DWAGDIDrawEllipse(int id, int x, int y, int w,int h){
 	DWAWindow* dwa = getWindowByID(id);
 	if (dwa!=NULL){
+		XSetLineAttributes(display, dwa->gc, dwa->penWidth, LineSolid, CapButt, JoinMiter);
 		XSetForeground(display,  dwa->gc, dwa->curcol);
 		XDrawArc(display, dwa->dblbuffer, dwa->gc, x, y, w, h, 0, 360*64);
 	}
@@ -524,8 +694,18 @@ void DWAGDIDrawEllipse(int id, int x, int y, int w,int h){
 void DWAGDIFillEllipse(int id, int x, int y, int w,int h){
 	DWAWindow* dwa = getWindowByID(id);
 	if (dwa!=NULL){
+		XSetLineAttributes(display, dwa->gc, dwa->penWidth, LineSolid, CapButt, JoinMiter);
 		XSetForeground(display,  dwa->gc, dwa->curcol);
 		XFillArc(display, dwa->dblbuffer, dwa->gc, x, y, w, h, 0, 360*64);
+	}
+}
+
+void DWAGDIFillRectangle(int id, int x, int y, int w,int h){
+	DWAWindow* dwa = getWindowByID(id);
+	if (dwa!=NULL){
+		XSetLineAttributes(display, dwa->gc, dwa->penWidth, LineSolid, CapButt, JoinMiter);
+		XSetForeground(display,  dwa->gc, dwa->curcol);
+		XFillRectangle(display, dwa->dblbuffer, dwa->gc, x, y, w, h);
 	}
 }
 
@@ -588,7 +768,24 @@ int DWAGDIGetTextHeight(int id, int fntid){
 int DWAGDIGetTextWidth(int id, int fntid, wchar_t* str){
 	DWAFont* dwf = getFontByID(fntid);
 	if (dwf!=NULL){
-		return XwcTextEscapement(dwf->fontset,str,wcslen(str));
+		if (dwf->type==0){
+			return XwcTextEscapement(dwf->fontset,str,wcslen(str));
+		}else{
+			std::vector<FcChar32> ucs4chars = wcharToUcs4(str);
+			if (ucs4chars.empty()) return 0;
+			int totalWidth = 0;
+			for (std::vector<FcChar32>::iterator it = ucs4chars.begin(); it != ucs4chars.end(); ++it) {
+			    FcChar32 ch = *it;
+				XftFont* font = findXtfFontbyChar(ch);
+				if (font) {
+					XGlyphInfo extents;
+					XftTextExtents32(display, font, &ch, 1, &extents);
+					totalWidth += extents.xOff;
+				}
+			}
+			return totalWidth;
+		}
+
 	}else{
 		return 0;
 	}
@@ -598,34 +795,38 @@ void DWAGDIDrawText(int id, int fntid, wchar_t* str, int x, int y){
 	DWAWindow* dwa = getWindowByID(id);
 	DWAFont* dwf = getFontByID(fntid);
 	if ((dwa!=NULL) && (dwf!=NULL)){
-		XSetForeground(display,  dwa->gc, dwa->curcol);
-		XwcDrawString(display,dwa->dblbuffer,dwf->fontset,dwa->gc,x,y+getFontAscent(id, fntid),str,wcslen(str));
-
-		/*
-		 conf["cpp_include_paths"]=["/usr/include/freetype2"]
-		 conf["libraries"]=["X11", "Xpm", "Xft"]
-
-		 #include <X11/Xft/Xft.h>
-
-		char buf[] = "Lorem Ipsum";
-		    int s, x = 12;
-		XftDraw * drw;
-		XRenderColor color = {0xFFFF, 0, 0, 0xFFFF};
-		XftColor xftc;
-		XftFont * f;
-		char font[] = "helvetica:size=11";
-
-		Window r;
-		r=RootWindow(display, s);
-
-		f = XftFontOpenName(display, s, font);
-		drw = XftDrawCreate(display, r, DefaultVisual(display, s), DefaultColormap(display, s));
-		XftColorAllocValue(display, DefaultVisual(display, s), DefaultColormap(display, s), &color, &xftc);
-		XftDrawStringUtf8(drw, &xftc, f, x, y+getFontAscent(0), (XftChar8 *)buf, 4);
-
-		XSetWindowBackgroundPixmap(display, r, p);
-
-		*/
+		if (dwf->type==0){
+			XSetForeground(display,  dwa->gc, dwa->curcol);
+			XwcDrawString(display,dwa->dblbuffer,dwf->fontset,dwa->gc,x,y+getFontAscent(id, fntid),str,wcslen(str));
+		}else{
+			if (dwa->xtfdraw==NULL){
+				dwa->xtfdraw = XftDrawCreate(display, dwa->dblbuffer, visual, colormap);
+			}
+			if ((dwa->xtfdraw!=NULL) && (dwa->xtfcolor!=NULL)){
+				std::vector<FcChar32> ucs4chars = wcharToUcs4(str);
+				if (ucs4chars.empty()) return;
+				int currentX = x;
+				for (std::vector<FcChar32>::iterator it = ucs4chars.begin(); it != ucs4chars.end(); ++it) {
+				    FcChar32 ch = *it;
+					XftFont* font = findXtfFontbyChar(ch);
+					if (font) {
+						XftDrawString32(dwa->xtfdraw,dwa->xtfcolor,font,currentX,y+getFontAscent(id, fntid),&ch,1);
+						XGlyphInfo extents;
+						XftTextExtents32(display, font, &ch, 1, &extents);
+						currentX += extents.xOff;
+					} else {
+						FcChar32 replacement = 0xFFFD;
+						XftFont* fallbackFont = findXtfFontbyChar(replacement);
+						if (fallbackFont) {
+							XftDrawString32(dwa->xtfdraw,dwa->xtfcolor,font,currentX,y+getFontAscent(id, fntid),&ch,1);
+							XGlyphInfo extents;
+							XftTextExtents32(display, font, &replacement, 1, &extents);
+							currentX += extents.xOff;
+						}
+					}
+				}
+			}
+		}
 
 	}
 }
@@ -640,14 +841,6 @@ void DWAGDIGetMousePosition(int* pos){
 	if (XQueryPointer(display,root,&winr,&winr,&rootx,&rooty,&winx,&winy,&mask_return)==True){
 		pos[0]=rootx;
 		pos[1]=rooty;
-	}
-}
-
-void DWAGDIFillRectangle(int id, int x, int y, int w,int h){
-	DWAWindow* dwa = getWindowByID(id);
-	if (dwa!=NULL){
-		XSetForeground(display,  dwa->gc, dwa->curcol);
-		XFillRectangle(display, dwa->dblbuffer, dwa->gc, x, y, w, h);
 	}
 }
 
@@ -674,7 +867,7 @@ void DWAGDIClipRectangle(int id, int x, int y, int w, int h){
 		curcliprect.y=y;
 		curcliprect.width=w;
 		curcliprect.height=h;
-		XSetClipRectangles(display, dwa->gc, 0, 0, &curcliprect, 1, YXSorted);
+		XSetClipRectangles(display, dwa->gc, 0, 0, &curcliprect, 1, Unsorted);
 	}
 }
 
@@ -696,13 +889,33 @@ wchar_t* DWAGDIGetClipboardText(){
 
 void DWAGDICreateNotifyIcon(int id, wchar_t* iconPath, wchar_t* toolTip){
 	DWANotifyIcon* dwanfi=addNotifyIcon(id);
+
 	XVisualInfo vinfo;
-	XMatchVisualInfo(display, DefaultScreen(display), 32, TrueColor, &vinfo);
-	XSetWindowAttributes attributes;
-	attributes.colormap = XCreateColormap(display, DefaultRootWindow(display), vinfo.visual, AllocNone);
-	attributes.border_pixel = 0;
-	attributes.background_pixel = 0;
-	dwanfi->win = XCreateWindow(display,root, -1, -1, 1, 1, 0, vinfo.depth,  InputOutput, vinfo.visual, CWColormap | CWBorderPixel | CWBackPixel, &attributes);
+	if (XMatchVisualInfo(display, screenid, 32, TrueColor, &vinfo)){
+		XSetWindowAttributes attributes;
+		attributes.colormap = XCreateColormap(display, root, vinfo.visual, AllocNone);
+		attributes.border_pixel = 0;
+		attributes.background_pixel = 0;
+		dwanfi->win = XCreateWindow(display,root, -24, -24, 24, 24, 0,
+								vinfo.depth,
+								InputOutput,
+								vinfo.visual,
+								CWColormap | CWBorderPixel | CWBackPixel,
+								&attributes);
+	}else{
+		XSetWindowAttributes attrs;
+		attrs.background_pixel = 0x000000;
+		attrs.event_mask = ButtonPressMask | ExposureMask;
+		attrs.override_redirect = True;
+		dwanfi->win = XCreateWindow(display,root,-24, -24, 24, 24, 0,
+								DefaultDepth(display, screenid),
+								InputOutput,
+								DefaultVisual(display, screenid),
+								CWBackPixel | CWEventMask | CWOverrideRedirect ,
+								&attrs);
+	}
+
+
 	dwanfi->gc = XCreateGC(display, dwanfi->win, 0, 0);
 	XSizeHints *sh = XAllocSizeHints();
 	sh->flags = PPosition | PSize | PMinSize;
@@ -778,6 +991,8 @@ void DWAGDIDestroyNotifyIcon(int id){
 }
 
 void drawNotify(DWANotifyIcon* dwanfi, int w, int h){
+	XSetForeground(display, dwanfi->gc, 0x00000000);
+	XFillRectangle(display, dwanfi->win, dwanfi->gc, 0, 0, w, h);
 	ImageReader imgr;
 	imgr.load(dwanfi->iconPath.c_str());
 	if (imgr.isLoaded()){
@@ -950,7 +1165,7 @@ void DWAGDILoop(CallbackEventMessage callback){
 	setlocale(LC_ALL, getenv("LANG"));
 	display = XOpenDisplay(NULL);
 	if (! display) {
-		fprintf (stderr, "Could not open display.\n");
+		fprintf(stderr, "Could not open display.\n");
 	}
 
 	wm_protocols = XInternAtom(display, "WM_PROTOCOLS", False);
@@ -992,7 +1207,7 @@ void DWAGDILoop(CallbackEventMessage callback){
 		if (XPending(display)){
 			XEvent e;
 			XNextEvent (display, &e);
-			if (e.type == Expose) {
+			if (e.type == Expose){
 				DWAWindow* dwa = getWindowByHandle(e.xany.window);
 				if (dwa!=NULL){
 					jonextevent.clear();
@@ -1125,7 +1340,7 @@ void DWAGDILoop(CallbackEventMessage callback){
 				DWAWindow* dwa = getWindowByHandle(e.xany.window);
 				if (dwa!=NULL){
 					if (e.xclient.message_type == wm_protocols &&
-						e.xclient.data.l[0] == wm_delete_window)  {
+							static_cast<Atom>(e.xclient.data.l[0]) == wm_delete_window)  {
 						jonextevent.clear();
 						jonextevent.beginObject();
 						jonextevent.addString(L"name", L"WINDOW");
@@ -1150,13 +1365,23 @@ void DWAGDILoop(CallbackEventMessage callback){
 	unsigned int cnt=fontList.size();
 	for (unsigned int i=0;i<cnt;i++){
 		DWAFont* dwf = fontList.at(i);
-		XFreeFontSet(display, dwf->fontset);
+		if (dwf->type==0){
+			XFreeFontSet(display, dwf->fontset);
+		}
 		delete dwf;
 	}
 	for (unsigned int i=0;i<cnt;i++){
 		fontList.erase(fontList.begin());
 	}
-	XFreeColormap (display, colormap);
+	for (std::map<FcChar32, XftFont*>::iterator it = hashToFont.begin();
+	     it != hashToFont.end(); ++it) {
+	    if (it->second) {
+	        XftFontClose(display, it->second);
+	    }
+	}
+	charToFontHash.clear();
+	hashToFont.clear();
+	XFreeColormap(display, colormap);
 	XCloseDisplay(display);
 }
 

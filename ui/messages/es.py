@@ -78,7 +78,7 @@ data={
     'error':u'Error',
     'errorAgentAlreadyExsists':u'El agente {0} ya existe.',
     'errorAgentMax':u'Se ha sobrepasado el número máximo de agentes.',
-    'errorAgentNameNotValid':u'El nombre de agente es inválido. No puede usar los caracteres / \ | # @ : .',
+    'errorAgentNameNotValid':u'El nombre de agente es inválido. No puede usar los caracteres / \\ | # @ : .',
     'errorConnectionConfig':u'Error en la conexión. Comprueba que el servicio DWAgent esté iniciado.',
     'errorConnectionQuestion':u'Error de conexión. Compruebe su conexión a internet o la configuración de su cortafuegos.\n¿Desea configurar un proxy?',
     'errorInvalidCode':u'El código introducido es inválido.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Falló la instalación del servicio...',
     'installShortcuts':u'Creando accesos directos...',
     'installShortcutsErr':u'Falló la instalación de los accesos directos.',
+    'installerNotSupported':u'Este instalador ya no es compatible. Descargue la última versión.',
     'ipAddress':u'Dirección IP: {0}',
     'linuxRootPrivileges':u'Debe tener privilegios de administrador para instalar DWAgent.\nPor favor inicie el script usando un usuario administrador.',
     'menuConfigure':u'Configurar',
@@ -167,7 +168,7 @@ data={
     'runWithoutInstallationEnd':u'Sesión finalizada.',
     'runWithoutInstallationOnlineBottom':u'ADVERTENCIA:\nNo revelar esta información a personas que no son de confianza, de otro modo, les permitirá acceder a este agente. Por lo tanto, si no está seguro de lo que está haciendo, cierre esta aplicación.',
     'runWithoutInstallationOnlineBottomPutCode':u'ADVERTENCIA:\nAhora el agente está listo para aceptar la conexión. Si no está seguro de lo que está haciendo, cierre esta aplicación.',
-    'runWithoutInstallationOnlinePassword':u'Password: {0}',
+    'runWithoutInstallationOnlinePassword':u'Contraseña: {0}',
     'runWithoutInstallationOnlineTop':u'La sesión está activa.\nPara conectarse a este agente, vaya a https://www.dwservice.net',
     'runWithoutInstallationOnlineTopPutCode':u'La sesión está activa',
     'runWithoutInstallationOnlineUser':u'User: {0}',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Al continuar con la instalación o ejecutar este software, usted acepta los #TERMSANDCONDITIONS y la #PRIVACYPOLICY',
     'welcomeSecurity':u'Seguridad\nPara proteger su privacidad garantizamos que no se almacenará información en nuestros servidores y las comunicaciones se cifrarán para que terceros no puedan leerlas de ningún modo.',
     'welcomeSoftwareUpdates':u'Actualizaciones\nLas actualizaciones de este software son automáticas.',
+    'welcomeTermsAndConditions':u'Al seleccionar la opción \'{0}\' o \'{1}\' acepto los #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Desbe tener privilegios de administrador para instalar DWAgent.\nPor favor inicie el instalador con \'Ejecutar como Administrador\'.',
     'yes':u'Si'
 }

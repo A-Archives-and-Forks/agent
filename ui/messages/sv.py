@@ -78,7 +78,7 @@ data={
     'error':u'Fel',
     'errorAgentAlreadyExsists':u'Agenten {0} existerar redan.',
     'errorAgentMax':u'Maximalt antal agenter har överskridits.',
-    'errorAgentNameNotValid':u'Agentnamnet är inte giltigt. Du kan inte använda tecknen / \ | # @ : .',
+    'errorAgentNameNotValid':u'Agentnamnet är inte giltigt. Du kan inte använda tecknen / \\ | # @ : .',
     'errorConnectionConfig':u'Anslutningsfel. Kontrollera om DWAgent-tjänsten är igång.',
     'errorConnectionQuestion':u'Anslutningsfel. Kontrollera din internetanslutning eller brandväggs-konfiguration.\nVill du konfigurera proxy?',
     'errorInvalidCode':u'Inskriven kod är felaktig.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Installation av tjänsten misslyckades.',
     'installShortcuts':u'Installerar genvägar...',
     'installShortcutsErr':u'Installationen av genvägar misslyckades.',
+    'installerNotSupported':u'Det här installationsprogrammet stöds inte längre. Ladda ner den senaste versionen.',
     'ipAddress':u'IP Adress: {0}',
     'linuxRootPrivileges':u'Du måste ha root privilegier för att installera DWAgent.\nStarta skriptet som root-användaren.',
     'menuConfigure':u'Konfigurera',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Genom att fortsätta med installationen eller köra denna programvara godkänner du #TERMSANDCONDITIONS och #PRIVACYPOLICY',
     'welcomeSecurity':u'Säkerhet\nFör att skydda din integritet garanterar vi att ingen information lagras på våra servrar, och kommunikationen är krypterad så att tredje part inte kan läsa dem.',
     'welcomeSoftwareUpdates':u'Mjukvaruuppdateringar\nUppdatering av denna programvara sker automatiskt.',
+    'welcomeTermsAndConditions':u'Genom att välja alternativet \'{0}\' eller \'{1}\' accepterar jag #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Du måste ha administratörsbehörigheter för att installera DWAgent.\nStarta programmet med \'Kör som administratör\'.',
     'yes':u'Ja'
 }

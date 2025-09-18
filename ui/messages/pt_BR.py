@@ -78,7 +78,7 @@ data={
     'error':u'Erro',
     'errorAgentAlreadyExsists':u'O agente {0} já existe.',
     'errorAgentMax':u'Número máximo de agentes atingido.',
-    'errorAgentNameNotValid':u'O nome do agente não é válido. Você não pode usar os caracteres / \ | # @ : .',
+    'errorAgentNameNotValid':u'O nome do agente não é válido. Você não pode usar os caracteres / \\ | # @ : .',
     'errorConnectionConfig':u'Erro de conexão. Por favor verifique se o serviço DWAgent está iniciado.',
     'errorConnectionQuestion':u'Erro de conexão. Por favor verifique sua conexão a internet ou configuração de firewall.\nVocê deseja configurar proxy?',
     'errorInvalidCode':u'O código inserido é inválido.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Instalação do serviço falhou.',
     'installShortcuts':u'Instalando atalhos',
     'installShortcutsErr':u'Instalação dos atalhos falharam.',
+    'installerNotSupported':u'Este instalador não é mais suportado. Por favor, faça o download da versão mais recente.',
     'ipAddress':u'Endereço IP: {0}',
     'linuxRootPrivileges':u'Você necessita ter privilégios de root para instalar o DWAgent.\nPor favor inicie o script usando um usuário root.',
     'menuConfigure':u'Configurar',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Ao prosseguir com a instalação ou executar este software, você concorda com os #TERMSANDCONDITIONS e com a #PRIVACYPOLICY',
     'welcomeSecurity':u'Segurança\nPara proteger sua privacidade nós garantimos que nenhuma informação será armazenada nos nossos servidores e as comunicações são criptografadas para que terceiros não possam acessá-las.',
     'welcomeSoftwareUpdates':u'Atualizações de software\nAs atualizações deste software são automáticas.',
+    'welcomeTermsAndConditions':u'Ao selecionar a opção \'{0}\' ou \'{1}\' eu aceito os #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Você deve ter privilégios de administrador para instalar o DWAgent.\nPor favor inicie o executável com \'Executar como administrador\'.',
     'yes':u'Sim'
 }

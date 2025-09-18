@@ -152,7 +152,7 @@ class Configure:
         if applg != "":
             prmsui["logo"]=applg
         if "leftcolor" in confjson:
-            prmsui["leftcolor"]=confjson["leftcolor"]  
+            prmsui["leftcolor"]=confjson["leftcolor"]
         self._uinterface = ui.UI(prmsui, self.step_init)
         self._uinterface.start(bgui)
         self.close_req();

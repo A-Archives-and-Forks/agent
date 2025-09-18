@@ -78,7 +78,7 @@ data={
     'error':u'Viga',
     'errorAgentAlreadyExsists':u'Agent {0} juba eksiteerib',
     'errorAgentMax':u'Agentide maksimaalne arv ületatud.',
-    'errorAgentNameNotValid':u'Agendi nimi sisaldab keelatud tähemärke. Keelatud märgid: / \ | # @ : .',
+    'errorAgentNameNotValid':u'Agendi nimi sisaldab keelatud tähemärke. Keelatud märgid: / \\ | # @ : .',
     'errorConnectionConfig':u'Ühenduse viga. Kontrolli kas DWAgendi teenus töötab ühendatavas arvutis.',
     'errorConnectionQuestion':u'Ühendumise viga. Kontrolli interneti ühendust või tulemüüri seadeid.\nKas soovid konfigureerida proxy ühenduse?',
     'errorInvalidCode':u'Sisestatud kood ei ole õige.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Service mooduli paigaldus ebaõnnestus.',
     'installShortcuts':u'Paigaldan otseteid...',
     'installShortcutsErr':u'Otseteede paigaldus nurjus.',
+    'installerNotSupported':u'Seda paigaldusprogrammi ei toetata enam. Palun laadige alla uusim versioon.',
     'ipAddress':u'IP Aadress: {0}',
     'linuxRootPrivileges':u'Sa pead olema root privileegidega kasutaja DWAgendi paigaldamiseks.\nPalun käivita script root kasutaja alt.',
     'menuConfigure':u'Konfigureeri',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Jätkates selle tarkvara paigaldamisega või selle käivitamisel nõustute dokumendiga: #TERMSANDCONDITIONS ja #PRIVACYPOLICY',
     'welcomeSecurity':u'Turvalisus\nTeie privaatsuse kaitsmiseks tagame, et meie serverites ei salvestata ühtegi teavet ja side on krüpteeritud nii, et kolmandad osapooled ei saa neid andmeid lugeda.',
     'welcomeSoftwareUpdates':u'Tarkvara uuendused\nSelle tarkvara värskendused on automaatsed.',
+    'welcomeTermsAndConditions':u'Valides valiku „{0}” või „{1}”, nõustun #TERMSANDCONDITIONS.',
     'windowsAdminPrivileges':u'DWAgendi paigaldamiseks peate omama administraatoriõigusi.\nKäivita paigaldusprogramm käsuga \'käivita administraatorina\'.',
     'yes':u'Jah'
 }

@@ -11,6 +11,19 @@ restext=resources.ResText("ui.messages")
 
 def set_locale(lng):
     restext.set_locale(lng)
+    
+def get_locale():
+    return restext.get_locale()
+
+def is_rtl():
+    try:
+        l=restext.get_locale()
+        if l is not None:
+            if l=="iw" or l.startswith("iw_"):
+                return True
+    except:
+        None
+    return False
 
 def get_message(key):
     return restext.get(key)

@@ -58,7 +58,7 @@ data={
     'configureTrayIconVisibility':u'Sistem tepsisi simge görünürlüğü',
     'configureUninstallKeyQuestion':u'Mevcut yükleme kodu kaldırılsın mı?',
     'configureUninstallationKey':u'Kaldırma...',
-    'confirmExit':u'Çıkmak istediğinizden emin misniz?_',
+    'confirmExit':u'Çıkmak istediğinizden emin misiniz?',
     'confirmInstall':u'DWAgent\'i \'{0}\' konumuna yüklemek istiyor musunuz?',
     'confirmUninstall':u'WGAgent\'i kaldırmak istiyor musunuz?',
     'copyFiles':u'Dosyalar kopyalanıyor...',
@@ -78,7 +78,7 @@ data={
     'error':u'Hata',
     'errorAgentAlreadyExsists':u'{0} aracısı zaten var.',
     'errorAgentMax':u'Maksimum ajan sayısı aşıldı.',
-    'errorAgentNameNotValid':u'Ajan adı geçerli değil. Karakterleri kullanamazsınız. / \ #@ : . |',
+    'errorAgentNameNotValid':u'Ajan adı geçerli değil. Karakterleri kullanamazsınız. / \\ #@ : . |',
     'errorConnectionConfig':u'Bağlantı Hatası.Lütfen DWAjan Yazılımının çalışma durumunu kontrol edin.',
     'errorConnectionQuestion':u'Bağlantı hatası. Lütfen internet bağlantınızı veya güvenlik duvarı yapılandırmanızı kontrol edin.\nProxy\'yi yapılandırmak ister misiniz?',
     'errorInvalidCode':u'Girilen kod geçeriz',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Servis yüklemesi başarısız oldu.',
     'installShortcuts':u'Kısayollar yükleniyor...',
     'installShortcutsErr':u'Kısayolların yüklenmesi başarısız oldu.',
+    'installerNotSupported':u'Yukleyici artık desteklenmiyor. Lütfen son versiyonu indiriniz.',
     'ipAddress':u'IP Adresi: {0}',
     'linuxRootPrivileges':u'DWAgent\'i yüklemek için root ayrıcalıklarına sahip olmalısınız.\nLütfen root kullanıcısı olarak betiği çalıştırınız.',
     'menuConfigure':u'Yapılandırma',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Kuruluma devam ederek veya bu yazılımı çalıştırarak #TERMSANDCONDITIONS ve #PRIVACYPOLICY\'nı kabul etmiş olursunuz.',
     'welcomeSecurity':u'Güvenlik\nGizliliğinizi korumak için uygulama bilgilerinizi sunucularımızda  saklamıyoruz. Kullanıcılar, sunucularımız ve uygulamalar arasındaki iletişim şifrelidir ve üçüncü kişiler tarafından ulaşılamaz.',
     'welcomeSoftwareUpdates':u'Yazılım güncellemeleri.\nBu yazılımın güncellemeleri kendiliğinden yapılır.',
+    'welcomeTermsAndConditions':u'\'{0}\' veya \'{1}\' seçeneğini seçerek #TERMSANDCONDITIONS anlaşmayı kabul edebilirsiniz.',
     'windowsAdminPrivileges':u'DWAgent\'i yüklemek için yönetici ayrıcalıklarına sahip olmalısınız.\nLütfen çalıştırılabilir dosyayı \'Yönetici olarak çalıştır\' ile başlatınız.',
     'yes':u'Evet'
 }

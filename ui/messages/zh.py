@@ -78,7 +78,7 @@ data={
     'error':u'错误',
     'errorAgentAlreadyExsists':u'此代理{0}已经存在.',
     'errorAgentMax':u'超过最大的代理数量.',
-    'errorAgentNameNotValid':u'代理名称无效. 你不能使用字符 / \ |',
+    'errorAgentNameNotValid':u'代理名称无效. 你不能使用字符 / \\ |',
     'errorConnectionConfig':u'连线错误. 请检察代理是否已启动.',
     'errorConnectionQuestion':u'连线错误. 请检察对外连线或防火墙的设置.\n是否有使用代理服务器?',
     'errorInvalidCode':u'输入的程式码错误.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'安装服务错误.',
     'installShortcuts':u'安装捷径...',
     'installShortcutsErr':u'安装捷径错误.',
+    'installerNotSupported':u'不再支持此安裝程序.  請下載最新版本.',
     'ipAddress':u'IP 地址: {0}',
     'linuxRootPrivileges':u'您必须具有root权限才能安装DWAgent.\n请使用root用户启动脚本.',
     'menuConfigure':u'设置',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'通过继续安装或运行此软件, 您同意#TERMSANDCONDITIONS和#PRIVACYPOLICY',
     'welcomeSecurity':u'安全性\n為了保護您的隱私, 我們保證不會在我們的服務器上存儲任何信息, 並且通信也會被加密, 因此無論如何第三方都無法讀取它們.',
     'welcomeSoftwareUpdates':u'軟件更新\n此軟件的更新是自動的.',
+    'welcomeTermsAndConditions':u'透過選擇 \'{0}\' 或 \'{1}\' 選項, 我接​​受 #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'您必須具有管理員權限才能安裝DWAgent.\n請以 \'以管理員身份運行\' 啟動可執行文件.',
     'yes':u'是'
 }

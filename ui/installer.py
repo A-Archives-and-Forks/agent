@@ -39,9 +39,9 @@ import utils
 _MAIN_URL = "https://www.dwservice.net/"
 _MAIN_URL_QA = "https://qa.dwservice.net/"
 _MAIN_URL_DEV = "https://dev.dwservice.net/dws_site/"
-_NATIVE_PATH = u'native'
-_RUNTIME_PATH = u'runtime'
-_INSTALLER_VERSION=1
+_NATIVE_PATH = u"native"
+_RUNTIME_PATH = u"runtime"
+_INSTALLER_VERSION=3
 
 def get_native():
     if gdi.is_windows():
@@ -50,25 +50,62 @@ def get_native():
         return NativeLinux()
     elif gdi.is_mac():
         return NativeMac()
-        
+    
+def get_os_type():
+    if gdi.is_linux():
+        return "Linux"
+    elif gdi.is_windows():
+        return "Windows"
+    elif gdi.is_mac():
+        return "Mac"
+    else:
+        return "Unknown"
+
+def get_os_type_code():
+    if gdi.is_linux():
+        return 0
+    elif gdi.is_windows():
+        return 1
+    elif gdi.is_mac():
+        return 2
+    else:
+        return -1
+
 def stop_monitor(installpath):
     try:
         stopfilename = installpath + utils.path_sep + u"monitor.stop"
         if not utils.path_exists(stopfilename):
-            stopfile = utils.file_open(stopfilename, "w", encoding='utf-8')
+            stopfile = utils.file_open(stopfilename, "w", encoding="utf-8")
             stopfile.close()
-        time.sleep(5) #Attende in modo che si chiudono i monitor
+        time.sleep(5)
         utils.path_remove(stopfilename) 
     except:
         None
+        
+def get_installer_ver(installpath):
+    try:
+        sver="0"
+        ptver = installpath + utils.path_sep + "native" + utils.path_sep + "installer.ver"
+        if utils.path_exists(ptver):
+            fver = utils.file_open(ptver, "rb")
+            sver=utils.bytes_to_str(fver.read())
+            fver.close()
+        return int(sver)
+    except:
+        return 0
 
 class NativeLinux:
+    
     def __init__(self):
         self._name=None
         self._current_path=None
         self._install_path=None
         self._etc_path=None
         self._logo_path=u"/ui/images/logo.png"
+        self._uinterface=None
+    
+    def set_uinterface(self, o):
+        self._uinterface=o
     
     def set_name(self, k):
         self._name=k
@@ -95,7 +132,7 @@ class NativeLinux:
             try:
                 s=f.read()
                 ar = json.loads(utils.bytes_to_str(s,"utf8"))
-                pth = ar['path']
+                pth = ar["path"]
                 if utils.path_exists(pth):
                     return pth
             finally:
@@ -133,10 +170,10 @@ class NativeLinux:
         return ret==0
     
     def replace_key_file(self, path, lst):
-        fin = utils.file_open(path, "r", encoding='utf-8')
+        fin = utils.file_open(path, "r", encoding="utf-8")
         data = fin.read()
         fin.close()
-        fout = utils.file_open(path, "w", encoding='utf-8')
+        fout = utils.file_open(path, "w", encoding="utf-8")
         for k in lst:
             data = data.replace(k,lst[k])
         fout.write(data)
@@ -193,21 +230,20 @@ class NativeLinux:
                 utils.path_rename(fmenuconf, pth + utils.path_sep + self._name.lower() + u".desktop")
                 fmenuconf=pth + utils.path_sep + self._name.lower() + u".desktop"        
             self.replace_key_file(fmenuconf, lstrepl)
-            utils.path_change_permissions(fmenuconf,  stat.S_IRWXU + stat.S_IRGRP + stat.S_IRWXO)
+            utils.path_change_permissions(fmenuconf,  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
         
     
-    #LO USA ANCHE agent.py
     def prepare_file_monitor(self, pth):
         lstrepl = self.get_replace_list()
         appf=pth + utils.path_sep + u"systray"
         if utils.path_exists(appf):
             self.replace_key_file(appf, lstrepl)
-            utils.path_change_permissions(appf,  stat.S_IRWXU + stat.S_IRGRP +  stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)
+            utils.path_change_permissions(appf,  stat.S_IRWXU + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)
         
         fmenusystray=pth + utils.path_sep + u"systray.desktop"
         if utils.path_exists(fmenusystray):
             self.replace_key_file(fmenusystray, lstrepl)
-            utils.path_change_permissions(fmenusystray,  stat.S_IRWXU + stat.S_IRGRP + stat.S_IRWXO)
+            utils.path_change_permissions(fmenusystray,  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
     
     def prepare_file(self):
         self.prepare_file_service(self._install_path + utils.path_sep + u"native")
@@ -220,11 +256,11 @@ class NativeLinux:
     def start_runonfly(self, runcode):
         pargs=[]
         pargs.append(sys.executable)
-        pargs.append(u'agent.py')
-        pargs.append(u'-runonfly')
-        pargs.append(u'-filelog')
+        pargs.append(u"agent.py")
+        pargs.append(u"-runonfly")
+        pargs.append(u"-filelog")
         if runcode is not None:
-            pargs.append(u'runcode=' + runcode)
+            pargs.append(u"runcode=" + runcode)
         
         libenv = os.environ
         libenv["LD_LIBRARY_PATH"]=utils.path_absname(self._current_path + utils.path_sep + u"runtime" + utils.path_sep + u"lib")
@@ -252,10 +288,9 @@ class NativeLinux:
         try:
             pautos = u"/etc/xdg/autostart"
             utils.path_copy(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"systray.desktop", pautos + utils.path_sep + self._name.lower() + u"_systray.desktop")
-            utils.path_change_permissions(pautos + utils.path_sep + self._name.lower() + u"_systray.desktop",  stat.S_IRWXU + stat.S_IRGRP + stat.S_IRWXO)
-            #SI DEVE LANCIARE CON L'UTENTE CONNESSO A X
-            #Esegue il monitor
-            #os.system(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwaglnc systray &")
+            utils.path_change_permissions(pautos + utils.path_sep + self._name.lower() + u"_systray.desktop",  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
+            if self._uinterface.is_gui() and utils.path_exists(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"systray"):
+                os.system(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"systray")
         except:
             None
         return True
@@ -281,9 +316,9 @@ class NativeLinux:
             #CREA /etc/dwagent
             if utils.path_exists(self._etc_path):
                 utils.path_remove(self._etc_path)
-            ar = {'path': self._install_path}
+            ar = {"path": self._install_path}
             s = json.dumps(ar, sort_keys=True, indent=1)
-            f = utils.file_open(self._etc_path, 'wb')
+            f = utils.file_open(self._etc_path, "wb")
             f.write(utils.str_to_bytes(s,"utf8"))            
             f.close()
             return True
@@ -306,24 +341,29 @@ class NativeLinux:
             return False
 
 class NativeMac:
+    
     def __init__(self):
         self._name=None
         self._current_path = None
         self._install_path = None
         self._svcnm = None
-        #self._guilncnm = None
+        self._lacnm = None
         self._systraynm = None
         self._logo_path=u"/ui/images/logo.icns"
+        self._uinterface=None
+    
+    def set_uinterface(self, o):
+        self._uinterface=o
 
     def set_name(self, k):
         self._name=k
         if self._name.lower()==u"dwagent":            
             self._svcnm = u"net.dwservice.agsvc"
-            #self._guilncnm = u"net.dwservice.agguilnc"
+            self._lacnm = u"net.dwservice.aglac"
             self._systraynm = u"net.dwservice.agsystray"
         else:
             self._svcnm = u"com.apiremoteaccess." + self._name.lower() + u"svc"
-            #self._guilncnm = u"com.apiremoteaccess." + self._name.lower() + u"lnc"
+            self._lacnm = u"com.apiremoteaccess." + self._name.lower() + u"lac"
             self._systraynm = u"com.apiremoteaccess." + self._name.lower() +  u"systray"
         
     def set_logo_path(self, pth):
@@ -339,7 +379,7 @@ class NativeMac:
         self._install_log=log
         
     def get_proposal_path(self):
-        return u'/Library/' + self._name 
+        return u"/Library/" + self._name 
     
     def get_install_path(self) :        
         ldpth = u"/Library/LaunchDaemons/" + self._svcnm + u".plist"
@@ -373,7 +413,7 @@ class NativeMac:
             if onlycheck:
                 return messages.get_message("linuxRootPrivileges")
             else:
-                f = utils.file_open(u"runasadmin.install", 'wb')
+                f = utils.file_open(u"runasadmin.install", "wb")
                 f.close()
                 raise SystemExit
         return None
@@ -383,6 +423,7 @@ class NativeMac:
             return messages.get_message(u"linuxRootPrivileges")
         return None
 
+    #2024 11 27 KEEP COMPATIBILITY OLD INSTALLATION
     def _get_os_ver(self):
         try:
             sver = platform.mac_ver()[0]
@@ -395,7 +436,8 @@ class NativeMac:
                 return [int(ar[0]),int(ar[1])]
         except:
             return [99999,99999]
-
+    
+    '''
     def _bootstrap_agent(self,pn):
         arver=self._get_os_ver()
         if arver[0]<10 or (arver[0]==10 and arver[1]<=9):
@@ -404,7 +446,9 @@ class NativeMac:
         else:
             utils.system_call(u"launchctl bootstrap gui/`stat -f '%u' /dev/console` /Library/LaunchAgents/" + pn, shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
             self._install_log.flush()
+    '''
     
+    #2024 11 27 KEEP COMPATIBILITY OLD INSTALLATION
     def _bootout_agent(self,pn):
         arver=self._get_os_ver()
         if arver[0]<10 or (arver[0]==10 and arver[1]<=9):
@@ -417,22 +461,16 @@ class NativeMac:
             self._install_log.flush()
             utils.system_call(u"for USER in `users`; do launchctl bootout gui/`id -u $USER` /Library/LaunchAgents/" + pn + "; done", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
             self._install_log.flush()
-            
+    
     def stop_service(self):
-        #Arresta GUILauncher
-        #self._bootout_agent(self._guilncnm + u".plist")
-        ret =utils.system_call(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwagsvc stop", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
+        ret = utils.system_call(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwagsvc stop", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
         self._install_log.flush()
         return ret==0
     
     def start_service(self):
         ret = utils.system_call(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwagsvc start", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
         self._install_log.flush()
-        bret = (ret==0)
-        #if bret:
-        #Avvia GUILauncher
-        #    self._bootstrap_agent(self._guilncnm + u".plist")
-        return bret
+        return ret==0
     
     def get_replace_list(self):
         return {
@@ -441,7 +479,7 @@ class NativeMac:
             u"@PATH_DWA@": self._install_path,
             u"@PATH_LOGOOS@": self._install_path + self._logo_path,
             u"@LDNAME_SERVICE@": self._svcnm ,
-            #u"@LDNAME_GUILNC@": self._guilncnm ,
+            u"@LDNAME_LAC@": self._lacnm ,
             u"@LDNAME_SYSTRAY@": self._systraynm 
         }
     
@@ -466,19 +504,21 @@ class NativeMac:
         self.replace_key_file(fapp, "utf-8", lstrepl)
         utils.path_change_permissions(fapp,  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
         
-        
-        #GUI Launcher
-        fapp=pth + utils.path_sep + "dwagguilnc"
-        utils.path_change_permissions(fapp,  stat.S_IRWXU + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)
-        
-        '''
-        fapp=pth + utils.path_sep + "dwagguilnc.plist"
+        #Lac
+        fapp=pth + utils.path_sep + "dwaglac.plist"
         self.replace_key_file(fapp, "utf-8", lstrepl)
         utils.path_change_permissions(fapp,  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
-        '''
+        
+        #DWAGENTSVC
+        #utils.path_change_permissions(pth + u"/DWAgentSvc.app/Contents/MacOS/DWAgentSvc",  stat.S_IRWXU + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)           
         
     
     def prepare_file_app(self, pth):
+        lstrepl = self.get_replace_list()
+        self.replace_key_file(pth + u"/dwagent", "utf-8", lstrepl)
+        utils.path_change_permissions(pth + u"/dwagent",  stat.S_IRUSR + stat.S_IWUSR + stat.S_IXUSR + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)
+        
+        '''
         utils.path_makedir(pth + u"/DWAgent.app/Contents/Resources")
         utils.path_copy(self._install_path + self._logo_path, pth + u"/DWAgent.app/Contents/Resources/Icon.icns")
         shutil.copytree(pth + u"/DWAgent.app",pth + u"/Configure.app")
@@ -488,7 +528,7 @@ class NativeMac:
             shutil.move(pth + u"/DWAgent.app",pth + u"/" + self._name + u".app")            
             idname=u"com.apiremoteaccess."
         
-        #DWAGENT        
+        #DWAGENT
         utils.path_change_permissions(pth + u"/" + self._name + u".app/Contents/MacOS/Run",  stat.S_IRUSR + stat.S_IWUSR + stat.S_IXUSR + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)           
         lstrepl = self.get_replace_list()
         lstrepl["@MOD_DWA@"]=u"monitor"
@@ -514,20 +554,17 @@ class NativeMac:
         lstrepl["@NAME@"]=u"Uninstall"
         lstrepl["@EXE_NAME@"]=u"uninstall"        
         lstrepl["@ID_NAME@"]=idname + lstrepl["@EXE_NAME@"]
-        self.replace_key_file(pth + u"/Uninstall.app/Contents/Info.plist", "utf-8", lstrepl)                
-        
+        self.replace_key_file(pth + u"/Uninstall.app/Contents/Info.plist", "utf-8", lstrepl)
+        '''                
     
     def prepare_file_monitor(self, pth):
         lstrepl = self.get_replace_list()
-        
-        fapp=pth + utils.path_sep + "dwagsystray"
-        utils.path_change_permissions(fapp,  stat.S_IRWXU + stat.S_IRGRP + stat.S_IXGRP + stat.S_IROTH + stat.S_IXOTH)
         
         fapp=pth + utils.path_sep + "dwagsystray.plist"
         self.replace_key_file(fapp, "utf-8", lstrepl)
         utils.path_change_permissions(fapp,  stat.S_IRUSR + stat.S_IWUSR + stat.S_IRGRP + stat.S_IROTH)
         
-    
+        
     def prepare_file(self):
         self.prepare_file_service(self._install_path + utils.path_sep + u"native")
         self.prepare_file_app(self._install_path + utils.path_sep + u"native")
@@ -539,11 +576,11 @@ class NativeMac:
     def start_runonfly(self, runcode):
         pargs=[]
         pargs.append(sys.executable)
-        pargs.append(u'agent.py')
-        pargs.append(u'-runonfly')
-        pargs.append(u'-filelog')
+        pargs.append(u"agent.py")
+        pargs.append(u"-runonfly")
+        pargs.append(u"-filelog")
         if runcode is not None:
-            pargs.append(u'runcode=' + runcode)
+            pargs.append(u"runcode=" + runcode)
         libenv = os.environ
         libenv["LD_LIBRARY_PATH"]=utils.path_absname(self._current_path + utils.path_sep + u"runtime" + utils.path_sep + u"lib")
         return subprocess.Popen(pargs, env=libenv)
@@ -568,16 +605,18 @@ class NativeMac:
     def install_auto_run_monitor(self):
         ret = utils.system_call(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwagsvc installAutoRun", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
         self._install_log.flush()
+        '''
         bret = (ret==0)
         if bret:
-            #Avvia systray
+            #Start systray
             self._bootstrap_agent(self._systraynm + u".plist")
-        return bret
-        
+        '''
+        return ret==0
     
     def remove_auto_run_monitor(self):
-        #Chiude tutti systray
-        self._bootout_agent(self._systraynm + u".plist")
+        if get_installer_ver(self._install_path)<3:
+            #Stop systray 2024 11 27 KEEP COMPATIBILITY OLD INSTALLATION
+            self._bootout_agent(self._systraynm + u".plist")
         ret = utils.system_call(self._install_path + utils.path_sep + u"native" + utils.path_sep + u"dwagsvc removeAutoRun", shell=True, stdout=self._install_log, stderr=subprocess.STDOUT)
         self._install_log.flush()
         return ret==0
@@ -587,14 +626,14 @@ class NativeMac:
     
     def install_shortcuts(self):
         try:
-            pathsrc = self._install_path + utils.path_sep + u"native/"
-            pathdst = u"/Applications/"
+            pathsrc = self._install_path + utils.path_sep + u"native/" + self._name + u".app"
+            pathdst = u"/Applications/" + self._name +u".app"
             if utils.path_exists(pathdst):
-                shutil.copytree(pathsrc + self._name + u".app", pathdst + self._name +u".app", symlinks=True)
+                utils.path_remove(pathdst)
+            shutil.copytree(pathsrc, pathdst, symlinks=True)                
             return True
         except:
             return False
-        
         
     def remove_shortcuts(self) :
         try:
@@ -683,7 +722,7 @@ if gdi.is_windows():
                         k = utils.str_new(k)
                         n= ctypes.windll.kernel32.GetEnvironmentVariableW(k, None, 0)
                         if n>0:
-                            buf= ctypes.create_unicode_buffer(u'\0'*n)
+                            buf= ctypes.create_unicode_buffer(u"\0"*n)
                             ctypes.windll.kernel32.GetEnvironmentVariableW(k, buf, n)
                             appenv.append(utils.str_new("%s=%s\0") % (k , buf.value))
                     appenv.append(utils.str_new("\0"))
@@ -807,6 +846,10 @@ class NativeWindows:
         self._py_exe=None
         self._runtime=None
         self._logo_path=u"\\ui\\images\\logo.ico"
+        self._uinterface=None
+    
+    def set_uinterface(self, o):
+        self._uinterface=o
     
     def set_name(self, k):
         self._name=k
@@ -848,7 +891,7 @@ class NativeWindows:
                     sz *= 2
                 if ret == 0:
                     if tp.value == 1 or tp.value == 2:
-                        vret = ctypes.wstring_at(buf, tmp_size.value // 2).rstrip(u'\x00')
+                        vret = ctypes.wstring_at(buf, tmp_size.value // 2).rstrip(u"\x00")
                     elif tp.value != 4 or tp.value != 7:
                         vret = ctypes.string_at(buf, tmp_size.value)
                 
@@ -867,11 +910,11 @@ class NativeWindows:
                 if gdi.is_windows_process_elevated():
                     return None
                 else:
-                    f = utils.file_open(u"runasadmin.install", "w", encoding='utf-8')
+                    f = utils.file_open(u"runasadmin.install", "w", encoding="utf-8")
                     f.close()
                     raise SystemExit
             else:
-                f = utils.file_open(u"runasadmin.run", "w", encoding='utf-8')
+                f = utils.file_open(u"runasadmin.run", "w", encoding="utf-8")
                 f.close()
                 raise SystemExit
         else:
@@ -885,14 +928,14 @@ class NativeWindows:
                 if onlycheck:
                     return messages.get_message("windowsAdminPrivileges")
                 else:
-                    f = utils.file_open(u"runasadmin.install", "w", encoding='utf-8')
+                    f = utils.file_open(u"runasadmin.install", "w", encoding="utf-8")
                     f.close()
                     raise SystemExit
         else:
             if onlycheck:
                 return messages.get_message("windowsAdminPrivileges")
             else:
-                f = utils.file_open(u"runasadmin.install", "w", encoding='utf-8')
+                f = utils.file_open(u"runasadmin.install", "w", encoding="utf-8")
                 f.close()
                 raise SystemExit
                         
@@ -914,47 +957,47 @@ class NativeWindows:
         #Scrive service.properties
         pth=self._install_path
         arf = []
-        arf.append(u''.join([u"serviceName=",self._name,u"\r\n"]))
-        arf.append(u''.join([u"iconPath=" ,  pth, self._logo_path + u"\r\n"]))
+        arf.append(u"".join([u"serviceName=",self._name,u"\r\n"]))
+        arf.append(u"".join([u"iconPath=" ,  pth, self._logo_path + u"\r\n"]))
         #FIX UNICODE PATH
-        arf.append(u''.join([u"pythonHome=runtime\r\n"]))
-        arf.append(u''.join([u"pythonPath=",  pth, utils.path_sep, u"runtime", utils.path_sep, self._runtime, u"\r\n"]))
+        arf.append(u"".join([u"pythonHome=runtime\r\n"]))
+        arf.append(u"".join([u"pythonPath=",  pth, utils.path_sep, u"runtime", utils.path_sep, self._runtime, u"\r\n"]))
         arf.append(u"parameters=-S -m agent -filelog")
-        f=utils.file_open(pth + utils.path_sep + u'native' + utils.path_sep + u'service.properties', 'w', encoding='utf-8') 
-        f.write(u''.join(arf))
+        f=utils.file_open(pth + utils.path_sep + u"native" + utils.path_sep + u"service.properties", "w", encoding="utf-8") 
+        f.write(u"".join(arf))
         f.close()
     
     def prepare_file_runonfly(self, runcode):
         #Scrive service.properties
         pth=self._install_path
         arf = []
-        arf.append(u''.join([u"serviceName=",self._name + u"RunOnFly",u"\r\n"]))
-        arf.append(u''.join([u"iconPath=" ,  pth, self._logo_path + u"\r\n"]))
+        arf.append(u"".join([u"serviceName=",self._name + u"RunOnFly",u"\r\n"]))
+        arf.append(u"".join([u"iconPath=" ,  pth, self._logo_path + u"\r\n"]))
         #FIX UNICODE PATH
         ar = self._current_path.split(utils.path_sep)
-        arf.append(u''.join([u"pythonHome=.." + utils.path_sep + ar[len(ar)-1] + utils.path_sep + u"runtime\r\n"]))
-        arf.append(u''.join([u"pythonPath=",  self._current_path, utils.path_sep, u"runtime", utils.path_sep, self._runtime, u"\r\n"]))
+        arf.append(u"".join([u"pythonHome=.." + utils.path_sep + ar[len(ar)-1] + utils.path_sep + u"runtime\r\n"]))
+        arf.append(u"".join([u"pythonPath=",  self._current_path, utils.path_sep, u"runtime", utils.path_sep, self._runtime, u"\r\n"]))
         arf.append(u"parameters=-S -m agent -runonfly -filelog")        
         if runcode is not None:
             arf.append(u" runcode=" + runcode)
         
-        f=utils.file_open(pth + utils.path_sep + u'native' + utils.path_sep + u'service.properties', 'w', encoding='utf-8') 
-        f.write(u''.join(arf))
+        f=utils.file_open(pth + utils.path_sep + u"native" + utils.path_sep + u"service.properties", "w", encoding="utf-8") 
+        f.write(u"".join(arf))
         f.close()        
         self._os_env = os.environ
-        self._os_env['PYTHONHOME'] = u".." + utils.path_sep + ar[len(ar)-1] + utils.path_sep + u"runtime"
+        self._os_env["PYTHONHOME"] = u".." + utils.path_sep + ar[len(ar)-1] + utils.path_sep + u"runtime"
         self._py_exe = self._current_path + utils.path_sep + u"runtime" + utils.path_sep + self._runtime    
     
     def start_runonfly(self, runcode):
         pargs=[]
         pargs.append(self._py_exe)
-        pargs.append(u'-S')
-        pargs.append(u'-m')
-        pargs.append(u'agent')
-        pargs.append(u'-runonfly')
-        pargs.append(u'-filelog')
+        pargs.append(u"-S")
+        pargs.append(u"-m")
+        pargs.append(u"agent")
+        pargs.append(u"-runonfly")
+        pargs.append(u"-filelog")
         if runcode is not None:
-            pargs.append(u'runcode=' + runcode)         
+            pargs.append(u"runcode=" + runcode)         
         
         badmin=False
         if gdi.is_windows_user_in_admin_group() and gdi.is_windows_run_as_admin():
@@ -969,7 +1012,7 @@ class NativeWindows:
             appout = NativeWindowsPopenUnicode(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate() 
             lines = utils.bytes_to_str(appout[0],"utf8").splitlines()
             for l in lines:
-                if l=='OK':
+                if l=="OK":
                     bsvcok = True
             if bsvcok==False:
                 return NativeWindowsPopenUnicode(pargs, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._os_env)
@@ -985,7 +1028,7 @@ class NativeWindows:
         appout = NativeWindowsPopenUnicode(cmd, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         lines = utils.bytes_to_str(appout[0],"utf8").splitlines()
         for l in lines:
-            if l=='OK':
+            if l=="OK":
                 return True
         return False
     
@@ -1009,7 +1052,7 @@ class NativeWindows:
         cmd=u'"' + self._install_path + utils.path_sep + u'native' + utils.path_sep + u'dwagsvc.exe" installAutoRun'
         b = self.executecmd(cmd)
         if b==True:
-            #Esegue il monitor
+            #run monitor
             cmdmon=u'"' + self._install_path + utils.path_sep + u'native' + utils.path_sep + u'dwaglnc.exe" systray' 
             NativeWindowsPopenUnicode(cmdmon, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         return b    
@@ -1049,6 +1092,7 @@ class Install:
         self._run_code=ui.VarString()
         self._install_newag_user=ui.VarString()
         self._install_newag_password=ui.VarString("", True)
+        self._install_newag_group=ui.VarString()
         self._install_newag_name=ui.VarString()
         self._proxy_type=ui.VarString("SYSTEM")
         self._proxy_host=ui.VarString("")
@@ -1064,6 +1108,7 @@ class Install:
         self._runWithoutInstallAgentAlive = True
         self._runWithoutInstallAgentCloseByClient=False
         self._runWithoutInstallAgentCloseEnd=True
+        self._skipcertsvalidity=False
         self._main_monitor=None
         self._bmock=False        
         
@@ -1176,12 +1221,12 @@ class Install:
         if applg != "":
             prmsui["logo"]=applg
         if "leftcolor" in self._options:
-            prmsui["leftcolor"]=self._options["leftcolor"]
+            prmsui["leftcolor"]=self._options["leftcolor"]        
         self._uinterface = ui.UI(prmsui, self.step_init)
-        
+        self._native.set_uinterface(self._uinterface)        
         if not self._silent:
             self._uinterface.set_action(self._uinterface_action)
-        self._uinterface.start(bgui) 
+        self._uinterface.start(bgui)         
         self.close_req()
                 
         #CHIUDE LOG
@@ -1190,9 +1235,7 @@ class Install:
                 self._install_log.close()
         except:
             None
-        
-        
-
+                
     '''def _read_info_file(self):
         try:
             f = utils.file_open("info.json")
@@ -1203,19 +1246,30 @@ class Install:
             return None'''
     
     def step_init(self, curui):
-        #Verifica version dell'installer se è valida per la macchina
+        #Check if instraller version is valid for machine
         if not gdi.is_windows() and not gdi.is_linux() and not gdi.is_mac():
             return ui.Message(self._get_message('versionInstallNotValid').format(""))
         if not self._silent:
             chs = ui.Chooser()
+                        
+            #self._options["welcometext"]=self._get_message('confirmInstall').format("Pippo 123 pluto 986+56")
+            #self._options["welcometext"]=self._get_message('confirmInstall').format("/usr/share/dwagent")
+            #self._options["welcometext"]=self._get_message('confirmInstall').format("c:\\programs files\\dwagent")
+            #self._options["welcometext"]=self._get_message('runWithoutInstallationWait').format("40%")
+            #self._options["welcometext"]=self._get_message('runWithoutInstallationOnlineUser').format("MOCK")
+            #self._options["welcometext"]=self._get_message('downloadFile').format("MOCK")
+            #self._options["welcometext"]=self._get_message('downloadFile').format("config") + " (10%)"
+            #self._options["welcometext"]="Prova pippo (10%)"            
+            
             if "welcometext" in self._options:
                 m=utils.str_new(self._options["welcometext"])
             else:            
                 m=self._get_message('welcomeLicense') + "\n\n" 
                 m+=self._get_message('welcomeSecurity') + "\n\n" 
-                m+=self._get_message('welcomeSoftwareUpdates') + "\n\n\n"
-                m+=self._get_message('welcomePrivacyTerms')
-                                
+                m+=self._get_message('welcomeSoftwareUpdates') + "\n\n"
+                #m+=self._get_message('welcomePrivacyTerms')
+                m+=self._get_message('welcomeTermsAndConditions').format(self._get_message('install'),self._get_message('runWithoutInstallation'))                
+                
                 p1 = m.index("https://www.dwservice.net/")
                 p2 = m.index(".html",p1)
                 surl= m[p1:p2+5]
@@ -1225,16 +1279,15 @@ class Install:
                 ptc = m.index("#TERMSANDCONDITIONS")                
                 chs.add_message_hyperlink(ptc, len(mtc), "https://www.dwservice.net/terms-and-conditions.html")
                 m=m.replace("#TERMSANDCONDITIONS", mtc)
-                
+                '''
                 mpp = self._get_message('privacyPolicy')
                 ppp = m.index("#PRIVACYPOLICY")                
                 chs.add_message_hyperlink(ppp, len(mpp), "https://www.dwservice.net/privacy-policy.html")
                 m=m.replace("#PRIVACYPOLICY", mpp)
-                
-                
+                '''
                 
             chs.set_message(m)            
-            chs.set_message_height(320)
+            chs.set_message_height(340)
             if "mode" in self._options and self._options["mode"]=="install":
                 chs.add("install", self._get_message('install'))
             elif "mode" in self._options and self._options["mode"]=="run":
@@ -1307,8 +1360,7 @@ class Install:
                     None
             return ui.Message(self._get_message('alreadyInstalled'))
         else:
-            if not self._silent:
-                #Scelta percorso
+            if not self._silent and not gdi.is_mac():
                 ipt = ui.Inputs()
                 if self._install_path.get() is None:
                     self._install_path.set(self._native.get_proposal_path())
@@ -1331,7 +1383,7 @@ class Install:
             self._ambient="QA"
             pth=pth[4:]
             self._install_path.set(pth)
-        if not self._silent:
+        if not self._silent and not gdi.is_mac():
             if not self._bmock and utils.path_exists(pth):
                 m=self._get_message('confirmInstall').format(pth) + u'\n' + self._get_message('warningRemovePath')
             else:
@@ -1364,7 +1416,6 @@ class Install:
         pth = self._install_path.get()
         url = node_url +  "getAgentFile.dw?name=" + name + "&version=" + version
         file_name = pth + utils.path_sep + name
-        #Scarica il file
         rtp = communication.Response_Transfer_Progress({'on_data': self._download_progress})
         rtp.set_property('file_name', name)
         rtp.set_property('prog_start', pstart)
@@ -1385,7 +1436,6 @@ class Install:
 
     def _unzip_file(self, name, unzippath):
         pth = self._install_path.get()
-        #Decoprime il file
         if unzippath!='':
             unzippath+=utils.path_sep 
         fpath=pth + utils.path_sep + name
@@ -1427,10 +1477,10 @@ class Install:
         f.close()
     
     def obfuscate_password(self, pwd):
-        return base64.b64encode(zlib.compress(pwd))
+        return utils.bytes_to_str(utils.enc_base64_encode(utils.zlib_compress(utils.str_to_bytes(pwd,"utf8"))))        
 
     def read_obfuscated_password(self, enpwd):
-        return zlib.decompress(base64.b64decode(enpwd))
+        return utils.bytes_to_str(utils.zlib_decompress(utils.enc_base64_decode(enpwd)),"utf8")
     
     def _copy_custom_images(self, prpconf, pth):
         ar = ["topimage", "logoxos", "logo16x16", "logo32x32", "logo48x48"]
@@ -1449,7 +1499,7 @@ class Install:
         else:
             dwnmsg=self._get_message('downloadFile')
         
-        if self._bmock:
+        if self._bmock:            
             msg=dwnmsg.format(u'MOCK')
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(2)
@@ -1458,16 +1508,33 @@ class Install:
         
         pth = self._install_path.get()
         fileversions = {}
-        
+                
         msg=dwnmsg.format(u'config.xml')
         self._uinterface.wait_message(msg,  iniperc,  pstart)
-        prpconf = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=config.xml", self._proxy)
+        jocheck={}
+        jocheck["version"]=_INSTALLER_VERSION
+        jocheck["os"]=get_os_type_code()
+        jocheck["osname"]=get_os_type()        
+        if self._runWithoutInstall:
+            jocheck["mode"]="R"
+        else:
+            jocheck["mode"]="I"
+        if self._silent:
+            jocheck["silent"]={}
+            if "key" in self._options:
+                jocheck["silent"]["key"]=self._options["key"]                
+            elif "user" in self._options:
+                jocheck["silent"]["user"]=self._options["user"]
+        scheck=utils.bytes_to_str(utils.enc_base64_encode(utils.str_to_bytes(json.dumps(jocheck),"utf8")))        
+        prpconf = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=config.xml&check=" + scheck, self._proxy)
+        if "error" in prpconf:
+            raise Exception(prpconf["error"])
         if "name" in self._options:
             prpconf["name"] = self._options["name"]
         if "topinfo" in self._options:
             prpconf["topinfo"]=self._options["topinfo"]
         if "topimage" in self._options and utils.path_exists(self._options["topimage"]):
-            prpconf["topimage"]=self._options["topimage"]                        
+            prpconf["topimage"]=self._options["topimage"]
         if "logoxos" in self._options and utils.path_exists(self._options["logoxos"]):
             prpconf["logoxos"]=self._options["logoxos"]
             self._native.set_logo_path(utils.path_sep + u"ui" + utils.path_sep + u"images" + utils.path_sep + u"custom" + utils.path_sep + prpconf["logoxos"])        
@@ -1508,6 +1575,8 @@ class Install:
                             prpconf["unattended_access"]=False
                     else:
                         prpconf["unattended_access"]=True
+                    if "ssl_cert_required" in appconf:
+                        del prpconf["ssl_cert_required"] 
                 else:
                     if bmonok:
                         prpconf["unattended_access"]=False
@@ -1517,7 +1586,9 @@ class Install:
                 None
         
         
-        self._copy_custom_images(prpconf, pth)
+        self._copy_custom_images(prpconf, pth)        
+        if self._skipcertsvalidity:
+            prpconf["ssl_cert_required"]=False        
         self.store_prop_json(prpconf, pth + utils.path_sep + u'config.json')
         
         if not (self._runWithoutInstall and utils.path_exists(pth + utils.path_sep + u"config.json") 
@@ -1525,15 +1596,13 @@ class Install:
                 and utils.path_exists(pth + utils.path_sep + u"communication.py") and utils.path_exists(pth + utils.path_sep + u"ipc.py")):
             msg=dwnmsg.format('files.xml')
             self._uinterface.wait_message(msg, iniperc,  pstart)
-            prpfiles = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=files.xml", self._proxy )
+            prpfiles = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=files.xml", self._proxy)
             
             if "nodeUrl" in prpfiles:
                 node_url = prpfiles['nodeUrl']
             if node_url is None or node_url=="":
-                raise Exception("Download files: Node not available.")        
-            
-            fls = []
-            
+                raise Exception("Download files: Node not available.")
+            fls = []            
             import detectinfo
             appnsfx = detectinfo.get_native_suffix()
             if not self._runWithoutInstall:
@@ -1543,8 +1612,7 @@ class Install:
             fls.append({'name':'agent.zip', 'unzippath':u''})
             if not self._runWithoutInstall:
                 fls.append({'name':u'agentui.zip', 'unzippath':u''})
-            fls.append({'name':u'agentapps.zip', 'unzippath':u''})
-            
+            fls.append({'name':u'agentapps.zip', 'unzippath':u''})            
             if appnsfx is not None:
                 if not appnsfx=="linux_generic":
                     if not self._runWithoutInstall:
@@ -1555,24 +1623,19 @@ class Install:
             for i in range(len(fls)):
                 fnm=fls[i]['name'];
                 file_name = pth + utils.path_sep + fnm
-                #Elimina file
                 try:
                     utils.path_remove(file_name)
                 except Exception:
                     None
-                #Scarica file
                 self._append_log(u"Download file " + fnm + " ...")
                 self._download_file(node_url, fnm, prpfiles[fnm + '@version'], pos,  pos+step)
                 self._append_log(u"Download file " + fnm + u".OK!")
-                #Verifica hash
                 self._append_log(u"Check file hash " + fnm + " ...")
                 self._check_hash_file(fnm, prpfiles[fnm + '@hash'])
                 self._append_log(u"Check file hash " + fnm + u".OK!")
-                #Unzip file
                 self._append_log(u"Unzip file " + fnm + " ...")
                 self._unzip_file(fnm, fls[i]['unzippath'])
                 self._append_log(u"Unzip file " + fnm + u".OK!")
-                #Elimina file
                 try:
                     utils.path_remove(file_name)
                 except Exception:
@@ -1580,9 +1643,7 @@ class Install:
                 fileversions[fnm ]=prpfiles[fnm + '@version']
                 pos+=step
             
-            #Scrive files.json
             self.store_prop_json(fileversions, pth + utils.path_sep + u'fileversions.json')
-        
     
     def _count_file_in_path(self, valid_path):
         x = 0
@@ -1613,7 +1674,6 @@ class Install:
         
     def _copy_tree(self, fs, ds, msg, pstart, pend):
         self._uinterface.wait_message(msg, 0, pstart)
-        #Conta file
         nfile = self._count_file_in_path(fs)
         step = (pend-pstart) / nfile
         self._copy_tree_file(fs, ds, {'message':msg,  'pstart':pstart,  'pend':pend,  'progr':pstart, 'step':step })
@@ -1635,7 +1695,6 @@ class Install:
             except:
                 raise Exception(u'Can not remove path.') #Inserire messaggio in lingua
             
-        #Crea le cartelle necessarie
         try:
             self._uinterface.wait_message(self._get_message('pathCreating'),  None, pend)
             utils.path_makedirs(pth)
@@ -1694,17 +1753,14 @@ class Install:
         msg=self._get_message('installService')
         self._uinterface.wait_message(msg, None,  pstart)
         
-        #Rimuove un eventuale vecchia installazione
         self._append_log(u"Service - Try to remove dirty installation...")
         self._native.stop_service()
         self._native.delete_service()
                 
-        #Installa nuovo servizio
         self._append_log(u"Service - Installation...")
         if not self._native.install_service():
             raise Exception(self._get_message('installServiceErr'))
             
-        #avvia il servizio
         self._append_log(u"Service - Starting...")
         msg=self._get_message('startService')
         self._uinterface.wait_message(msg, None,  pend)
@@ -1722,11 +1778,9 @@ class Install:
         msg=self._get_message('installMonitor')
         self._uinterface.wait_message(msg,  None, pstart)        
         
-        #Arresta un eventuale monitor attivo
         self._append_log(u"Monitor - Stopping...")
         stop_monitor(self._install_path.get())
         
-        #Rimuove vecchia installazione
         self._append_log(u"Monitor - Try to remove dirty installation...")
         self._native.remove_auto_run_monitor()
         
@@ -1746,11 +1800,9 @@ class Install:
         msg=self._get_message('installShortcuts')
         self._uinterface.wait_message(msg,  None, pstart)
         
-        #Rimuove collegamenti
         self._append_log(u"Shortcut - Try to remove dirty installation...")
         self._native.remove_shortcuts()
         
-        #Installazione collegamneti
         self._append_log(u"Shortcut - Installing...")
         if not self._native.install_shortcuts():
             raise Exception(self._get_message('installShortcutsErr'))
@@ -1758,12 +1810,12 @@ class Install:
     
     def step_config_init(self, curui):
         chs = ui.Chooser()
-        m=self._get_message('configureInstallAgent')
+        m=self._get_message("configureInstallAgent")
         chs.set_message(m)
         chs.set_key("chooseInstallMode")
-        chs.set_param('firstConfig',curui.get_param('firstConfig',False))
-        chs.add("installCode", self._get_message('configureInstallCode'))
-        chs.add("installNewAgent", self._get_message('configureInstallNewAgent'))        
+        chs.set_param("firstConfig",curui.get_param("firstConfig",False))
+        chs.add("installCode", self._get_message("configureInstallCode"))
+        chs.add("installNewAgent", self._get_message("configureInstallNewAgent"))        
         chs.set_variable(ui.VarString("installCode"))
         chs.next_step(self.step_config)
         if "installputcode" in self._options and self._options["installputcode"]:
@@ -1771,35 +1823,38 @@ class Install:
         return chs
     
     def step_config(self, curui):
-        if curui.get_param('tryAgain',False):
-            if curui.get_variable().get()=='configureLater':
-                return ui.Message(self._get_message('endInstallConfigLater'))
+        if curui.get_param("tryAgain",False):
+            if curui.get_variable().get()=="configureLater":
+                return ui.Message(self._get_message("endInstallConfigLater"))
         
-        if curui.get_key() is not None and curui.get_key()=='chooseInstallMode':
+        if curui.get_key() is not None and curui.get_key()=="chooseInstallMode":
             self._inatall_agent_mode=curui.get_variable().get()
         
         if self._inatall_agent_mode=="installNewAgent":
             ipt = ui.Inputs()
-            ipt.set_key('configure')
-            ipt.set_param('firstConfig',curui.get_param('firstConfig',False))
-            ipt.set_message(self._get_message('enterInstallNewAgent'))
+            ipt.set_key("configure")
+            ipt.set_param("firstConfig",curui.get_param("firstConfig",False))
+            ipt.set_message(self._get_message("enterInstallNewAgent"))
             if self._install_newag_user.get() is None:
                 self._install_newag_user.set("")
-            ipt.add('user', self._get_message('configureInstallUser'), self._install_newag_user, True)
+            ipt.add("user", self._get_message("configureInstallUser"), self._install_newag_user, True)
             if self._install_newag_password.get() is None:
                 self._install_newag_password.set("")
-            ipt.add('password', self._get_message('configureInstallPassword'), self._install_newag_password, True)
+            ipt.add("password", self._get_message("configureInstallPassword"), self._install_newag_password, True)            
+            if self._install_newag_group.get() is None:
+                self._install_newag_group.set("")
+            #ipt.add("group", self._get_message("groupName"), self._install_newag_group, True)            
             if self._install_newag_name.get() is None:
-                self._install_newag_name.set("")
-            ipt.add('name', self._get_message('agentName'), self._install_newag_name, True)
+                self._install_newag_name.set("")            
+            ipt.add("name", self._get_message("agentName"), self._install_newag_name, True)
         else:
             ipt = ui.Inputs()
-            ipt.set_key('configure')
-            ipt.set_param('firstConfig',curui.get_param('firstConfig',False))
+            ipt.set_key("configure")
+            ipt.set_param("firstConfig",curui.get_param("firstConfig",False))
             if self._install_code.get() is None:
                 self._install_code.set("")
-            ipt.set_message(self._get_message('enterInstallCode'))
-            ipt.add('code', self._get_message('code'), self._install_code, True)
+            ipt.set_message(self._get_message("enterInstallCode"))
+            ipt.add("code", self._get_message("code"), self._install_code, True)
         if not ("installputcode" in self._options and self._options["installputcode"]):            
             ipt.prev_step(self.step_config_init)
         ipt.next_step(self.step_config_install_request)
@@ -1811,7 +1866,7 @@ class Install:
                 self._ipc_client=listener.IPCClient(self._install_path.get())
             return self._ipc_client.send_request("admin", "", req, prms)
         except: 
-            return 'ERROR:REQUEST_TIMEOUT'
+            return "ERROR:REQUEST_TIMEOUT"
     
     def close_req(self):
         if self._ipc_client!=None and not self._ipc_client.is_close():
@@ -1819,28 +1874,28 @@ class Install:
     
     def _send_password_config(self):
         if "configPassword" in self._options:
-            self.send_req("change_pwd",{'password': self._options["configPassword"]})
+            self.send_req("change_pwd",{"password": self._options["configPassword"]})
     
     def _send_proxy_config(self):
-        pt = ''
+        pt = ""
         if self._proxy.get_port() is not None:
             pt=str(self._proxy.get_port())
-        return self.send_req("set_proxy",{'type': self._proxy.get_type(), 
-                                   'host': self._proxy.get_host(), 
-                                   'port': pt, 
-                                   'user': self._proxy.get_user(), 
-                                   'password': self._proxy.get_password()})
+        return self.send_req("set_proxy",{"type": self._proxy.get_type(), 
+                                   "host": self._proxy.get_host(), 
+                                   "port": pt, 
+                                   "user": self._proxy.get_user(), 
+                                   "password": self._proxy.get_password()})
     
     def step_configure_proxy_type(self, curui):
         chs = ui.Chooser()
         chs.set_key(curui.get_key())
-        chs.set_message(self._get_message('chooseProxyType'))
-        chs.add("SYSTEM", self._get_message('proxySystem'))
-        chs.add("HTTP", self._get_message('proxyHttp'))
-        chs.add("SOCKS4", self._get_message('proxySocks4'))
-        chs.add("SOCKS4A", self._get_message('proxySocks4a'))
-        chs.add("SOCKS5", self._get_message('proxySocks5'))
-        chs.add("NONE", self._get_message('proxyNone'))
+        chs.set_message(self._get_message("chooseProxyType"))
+        chs.add("SYSTEM", self._get_message("proxySystem"))
+        chs.add("HTTP", self._get_message("proxyHttp"))
+        chs.add("SOCKS4", self._get_message("proxySocks4"))
+        chs.add("SOCKS4A", self._get_message("proxySocks4a"))
+        chs.add("SOCKS5", self._get_message("proxySocks5"))
+        chs.add("NONE", self._get_message("proxyNone"))
         chs.set_variable(self._proxy_type)
         if curui.get_key()=="install":
             if not self._runWithoutInstall:
@@ -1848,21 +1903,21 @@ class Install:
             else:
                 chs.prev_step(self.step_init)
         elif curui.get_key()=="runonfly":
-            None #non abilita il tasto prev
+            None #disable prev button
         else:
             chs.prev_step(self.step_config)
         chs.next_step(self.step_configure_proxy_info)
         return chs
     
     def step_configure_proxy_info(self, curui):
-        if curui.get_variable().get()=='HTTP' or curui.get_variable().get()=='SOCKS4' or curui.get_variable().get()=='SOCKS4A' or curui.get_variable().get()=='SOCKS5':
+        if curui.get_variable().get()=="HTTP" or curui.get_variable().get()=="SOCKS4" or curui.get_variable().get()=="SOCKS4A" or curui.get_variable().get()=="SOCKS5":
             ipt = ui.Inputs()
             ipt.set_key(curui.get_key())
-            ipt.set_message(self._get_message('proxyInfo'))
-            ipt.add('proxyHost', self._get_message('proxyHost'), self._proxy_host,  True)
-            ipt.add('proxyPort', self._get_message('proxyPort'), self._proxy_port,  True)
-            ipt.add('proxyAuthUser', self._get_message('proxyAuthUser'), self._proxy_user,  False)
-            ipt.add('proxyAuthPassword', self._get_message('proxyAuthPassword'), self._proxy_password,  False)
+            ipt.set_message(self._get_message("proxyInfo"))
+            ipt.add("proxyHost", self._get_message("proxyHost"), self._proxy_host,  True)
+            ipt.add("proxyPort", self._get_message("proxyPort"), self._proxy_port,  True)
+            ipt.add("proxyAuthUser", self._get_message("proxyAuthUser"), self._proxy_user,  False)
+            ipt.add("proxyAuthPassword", self._get_message("proxyAuthPassword"), self._proxy_password,  False)
             ipt.prev_step(self.step_configure_proxy_type)
             ipt.next_step(self.step_configure_proxy_set)
             return ipt
@@ -1874,44 +1929,43 @@ class Install:
             return self.step_configure_proxy_set(curui)
     
     def step_configure_proxy_set(self, curui):
-        if curui.get_param('tryAgain',False):
-            if curui.get_variable() is not None and curui.get_variable().get()=='configureLater':
+        if curui.get_param("tryAgain",False):
+            if curui.get_variable() is not None and curui.get_variable().get()=="configureLater":
                 return self.step_config(curui)
-        #Verifica se la porta è numerica
         oldprx = self._proxy
         self._proxy=communication.ProxyInfo()
         self._proxy.set_type(self._proxy_type.get())
         self._proxy.set_host(self._proxy_host.get())
-        if self._proxy_type.get()=='HTTP' or self._proxy_type.get()=='SOCKS4' or self._proxy_type.get()=='SOCKS4A' or self._proxy_type.get()=='SOCKS5':
+        if self._proxy_type.get()=="HTTP" or self._proxy_type.get()=="SOCKS4" or self._proxy_type.get()=="SOCKS4A" or self._proxy_type.get()=="SOCKS5":
             try:
                 self._proxy.set_port(int(self._proxy_port.get()))
             except:
                 self._proxy = oldprx
-                return ui.ErrorDialog(self._get_message("validInteger") .format(self._get_message('proxyPort')))
+                return ui.ErrorDialog(self._get_message("validInteger") .format(self._get_message("proxyPort")))
         self._proxy.set_user(self._proxy_user.get())
         self._proxy.set_password(self._proxy_password.get())
-        if curui.get_key()=='install':
-            curui.set_key('retryDownloadProxy')
+        if curui.get_key()=="install":
+            curui.set_key("retryDownloadProxy")
             return self.step_install(curui)
         elif curui.get_key()=="runonfly":
-            curui.set_key('retryRunOnFlyProxy')
+            curui.set_key("retryRunOnFlyProxy")
             return self.step_runonfly(curui)
         else:
             try:
                 s=self._send_proxy_config()
-                if s=='OK':
+                if s=="OK":
                     return self.step_config_install_request(curui)
                 elif s=="ERROR:REQUEST_TIMEOUT":
-                    return ui.ErrorDialog(self._get_message('errorConnectionConfig'))
+                    return ui.ErrorDialog(self._get_message("errorConnectionConfig"))
                 else:
                     return ui.ErrorDialog(s) 
             except:
                 chs = ui.Chooser()
                 chs.set_key(curui.get_key())
                 chs.set_param("tryAgain", True)
-                chs.set_message(self._get_message('errorConnectionConfig'))
-                chs.add("noTryAgain", self._get_message('noTryAgain'))
-                chs.add("configureLater", self._get_message('configureLater'))
+                chs.set_message(self._get_message("errorConnectionConfig"))
+                chs.add("noTryAgain", self._get_message("noTryAgain"))
+                chs.add("configureLater", self._get_message("configureLater"))
                 chs.set_variable(ui.VarString("noTryAgain"))
                 chs.prev_step(self.step_config)
                 chs.next_step(self.step_configure_proxy_set)
@@ -1921,18 +1975,18 @@ class Install:
     def step_config_install_request(self, curui):
         if self._bmock:
             self._append_log(u"End Installation.")
-            return ui.Message(self._get_message('endInstall'))
+            return ui.Message(self._get_message("endInstall"))
         
         if not self._silent:
-            if curui.get_param('tryAgain',False):
-                if curui.get_variable().get()=='configureLater':
-                    return ui.Message(self._get_message('endInstallConfigLater'))
-                elif curui.get_variable().get()=='configProxy':
+            if curui.get_param("tryAgain",False):
+                if curui.get_variable().get()=="configureLater":
+                    return ui.Message(self._get_message("endInstallConfigLater"))
+                elif curui.get_variable().get()=="configProxy":
                     return self.step_configure_proxy_type(curui)
         
         if self._silent:
             if gdi.is_mac():
-                time.sleep(10) #silent install on Mac 
+                time.sleep(14) #silent install on Mac 
             if "key" in self._options:
                 self._inatall_agent_mode="installCode"
                 self._install_code.set(self._options["key"])
@@ -1940,61 +1994,64 @@ class Install:
                 self._inatall_agent_mode="installNewAgent"
                 self._install_newag_user.set(self._options["user"])
                 self._install_newag_password.set(self._options["password"])
+                if "agentGroup" in self._options:
+                    self._install_newag_group.set(self._options["agentGroup"])
                 if "agentName" in self._options:
                     self._install_newag_name.set(self._options["agentName"])
                 else:
-                    self._install_newag_name.set(platform.node())
+                    self._install_newag_name.set(platform.node())                
             else:
                 self._append_log(u"End Installation.")
-                return ui.Message(self._get_message('endInstall'))
+                return ui.Message(self._get_message("endInstall"))
             
         if self._inatall_agent_mode=="installNewAgent":
             self._append_log(u"Create new Agent ...")
-            msg=self._get_message('createNewAgent')
+            msg=self._get_message("createNewAgent")
         else:
             self._append_log(u"Check Install Code ...")
-            msg=self._get_message('checkInstallCode')            
+            msg=self._get_message("checkInstallCode")            
         self._uinterface.wait_message(msg)
         page = None
         try:
-            #Imposta il proxy
-            if curui.get_param('firstConfig',False) and self._proxy is not None:
+            if curui.get_param("firstConfig",False) and self._proxy is not None:
                 s=self._send_proxy_config()
-                if s!='OK':
+                if s!="OK":
                     if s=="ERROR:REQUEST_TIMEOUT":
                         self._append_log(u"Error Configure: Request timeout")
-                        return ui.ErrorDialog(self._get_message('errorConnectionConfig'))
+                        return ui.ErrorDialog(self._get_message("errorConnectionConfig"))
                     else:
                         self._append_log(u"Error Configure: " + s)
                         return ui.ErrorDialog(s)
-            #Verifica codice
             s = None
             if self._inatall_agent_mode=="installNewAgent":
-                s = self.send_req("install_new_agent",{'user': self._install_newag_user.get(), 'password': self._install_newag_password.get(), 'name':self._install_newag_name.get()})
+                prminst={"user": self._install_newag_user.get(), "password": self._install_newag_password.get(), "name":self._install_newag_name.get()}
+                if self._install_newag_group.get() is not None and self._install_newag_group.get().strip()!="":
+                    prminst["group"]=self._install_newag_group.get().strip()
+                s = self.send_req("install_new_agent",prminst)
             else:
-                s = self.send_req("install_key",{'code': self._install_code.get().strip().replace(" ", "")})
-            if s=='OK':
+                s = self.send_req("install_key",{"code": self._install_code.get().strip().replace(" ", "")})
+            if s=="OK":
                 self._append_log(u"End Installation.")
-                return ui.Message(self._get_message('endInstall'))
+                return ui.Message(self._get_message("endInstall"))
             elif s=="ERROR:INVALID_CODE" or s=="ERROR:INVALID_USER_PASSWORD" or s=="ERROR:NAME_NOT_VALID" or s=="ERROR:ALREADY_EXISTS" or s=="ERROR:AGENT_MAX":
                 if not self._silent:
                     chs = ui.Chooser()
-                    chs.set_key('configure')
-                    chs.set_param('tryAgain',True)
+                    chs.set_key("configure")
+                    chs.set_param("tryAgain",True)
                     if s=="ERROR:INVALID_CODE":
-                        chs.set_message(self._get_message('errorInvalidCode'))
+                        chs.set_message(self._get_message("errorInvalidCode"))
                     elif s=="ERROR:INVALID_USER_PASSWORD":
-                        chs.set_message(self._get_message('errorInvalidUserPassword'))
+                        chs.set_message(self._get_message("errorInvalidUserPassword"))
                     elif s=="ERROR:NAME_NOT_VALID":
-                        chs.set_message(self._get_message('errorAgentNameNotValid'))
+                        chs.set_message(self._get_message("errorAgentNameNotValid"))
                     elif s=="ERROR:ALREADY_EXISTS":
-                        chs.set_message(self._get_message('errorAgentAlreadyExsists').format(self._install_newag_name.get()))
+                        chs.set_message(self._get_message("errorAgentAlreadyExsists").format(self._install_newag_name.get()))
                     elif s=="ERROR:AGENT_MAX":
-                        chs.set_message(self._get_message('errorAgentMax'))
+                        chs.set_message(self._get_message("errorAgentMax"))
                     else:
                         chs.set_message(s)
-                    chs.add("reEnter", self._get_message('reEnterData'))
-                    chs.add("configureLater", self._get_message('configureLater'))
+                    chs.add("reEnter", self._get_message("reEnterData"))
+                    chs.add("configureLater", self._get_message("configureLater"))
                     chs.set_variable(ui.VarString("reEnter"))
                     chs.next_step(self.step_config)
                     chs.prev_step(self.step_config)
@@ -2006,12 +2063,12 @@ class Install:
             elif s=="ERROR:CONNECT_ERROR":
                 if not self._silent:
                     chs = ui.Chooser()
-                    chs.set_key('configure')
-                    chs.set_param('tryAgain',True)
-                    chs.set_message(self._get_message('errorConnectionQuestion'))
-                    chs.add("configProxy", self._get_message('yes'))
-                    chs.add("noTryAgain", self._get_message('noTryAgain'))
-                    chs.add("configureLater", self._get_message('configureLater'))
+                    chs.set_key("configure")
+                    chs.set_param("tryAgain",True)
+                    chs.set_message(self._get_message("errorConnectionQuestion"))
+                    chs.add("configProxy", self._get_message("yes"))
+                    chs.add("noTryAgain", self._get_message("noTryAgain"))
+                    chs.add("configureLater", self._get_message("configureLater"))
                     chs.set_variable(ui.VarString("noTryAgain"))
                     chs.prev_step(self.step_config)
                     chs.next_step(self.step_config_install_request)
@@ -2023,18 +2080,18 @@ class Install:
             
             elif s=="ERROR:REQUEST_TIMEOUT":
                 self._append_log(u"Error Configure: Request timeout")
-                return ui.ErrorDialog(self._get_message('errorConnectionConfig'))
+                return ui.ErrorDialog(self._get_message("errorConnectionConfig"))
             else:
                 self._append_log(u"Error Configure: " + s)
                 return ui.ErrorDialog(s) 
         except Exception as e:
             if not self._silent:
                 chs = ui.Chooser()
-                chs.set_key('configure')
-                chs.set_param('tryAgain',True)
-                chs.set_message(self._get_message('errorConnectionConfig'))
-                chs.add("noTryAgain", self._get_message('noTryAgain'))
-                chs.add("configureLater", self._get_message('configureLater'))
+                chs.set_key("configure")
+                chs.set_param("tryAgain",True)
+                chs.set_message(self._get_message("errorConnectionConfig"))
+                chs.add("noTryAgain", self._get_message("noTryAgain"))
+                chs.add("configureLater", self._get_message("configureLater"))
                 chs.set_variable(ui.VarString("noTryAgain"))
                 chs.prev_step(self.step_config)
                 chs.next_step(self.step_config_install_request)
@@ -2050,7 +2107,7 @@ class Install:
         try:
             if not self._bmock:
                 if self._install_log is not None:
-                    self._install_log.write(utils.str_new(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())) + u" - " + txt + u"\n")
+                    self._install_log.write(utils.str_new(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())) + u" - " + txt + u"\n")
                     self._install_log.flush()
         except:
             None    
@@ -2066,12 +2123,12 @@ class Install:
                 self._runonfly_update(pthsrc + utils.path_sep + fname,pthdst + utils.path_sep + fname)
     
     
-    #COMPATIBILITA' VERSIONI PRECEDENTI DI RUNONFLY
+    #COMPATIBILITY OLD VERSIONS OF RUNONFLY
     def _fix_runonfly_old_version(self):
         if utils.path_exists(u"fileversions.json"):            
-            fver = self.load_prop_json('fileversions.json')
-            if 'agent.zip' in fver:
-                lver = int(fver['agent.zip'])
+            fver = self.load_prop_json("fileversions.json")
+            if "agent.zip" in fver:
+                lver = int(fver["agent.zip"])
                 if lver<1484751796000:
                     self._append_log(u"Fixing old version...")
                     sys.path.insert(0,self._install_path.get())
@@ -2081,7 +2138,7 @@ class Install:
                             reload(objlib)                            
                         else:
                             importlib.reload(objlib)
-                        func = getattr(objlib,  'Main')
+                        func = getattr(objlib,  "Main")
                         appcls = func(["-runonfly","-filelog"])
                         #IMPOSTARE IL PROXY
                         appcls._read_config_file()
@@ -2098,7 +2155,7 @@ class Install:
                                 None
                         sys.path.remove(sys.path[0])
                     if bnoupd:
-                        raise Exception("") #GESTITO IN step_runonfly
+                        raise Exception("") #DONE IN step_runonfly
                     return True
         return False                
         
@@ -2118,7 +2175,7 @@ class Install:
             if "runtoptext" in self._options:                            
                 appwmsg.append(self._options["runtoptext"])
             else:
-                appwmsg.append(self._get_message("runWithoutInstallationOnlineTop"))
+                appwmsg.append(self._get_message("runWithoutInstallationOnlineTop").replace("https://www.dwservice.net", "https://access.dwservice.net/login.dw"))
             appwmsg.append(u"\n\n")
             appwmsg.append(self._get_message("runWithoutInstallationOnlineUser").format(usr))
             appwmsg.append(u"\n\n")
@@ -2156,16 +2213,16 @@ class Install:
     
     def step_runonfly_putcode(self, curui):
         ipt = ui.Inputs()
-        ipt.set_key('configure')
-        #ipt.set_param('firstConfig',curui.get_param('firstConfig',False))
+        ipt.set_key("configure")
+        #ipt.set_param("firstConfig",curui.get_param("firstConfig",False))
         if self._run_code.get() is None:
             self._run_code.set("")
-        ipt.set_message(self._get_message('enterRunCode'))
-        ipt.add('code', self._get_message('code'), self._run_code, True)
+        ipt.set_message(self._get_message("enterRunCode"))
+        ipt.add("code", self._get_message("code"), self._run_code, True)
         ipt.prev_step(self.step_init)
         ipt.next_step(self.step_runonfly)
         return ipt
-     
+    
     def step_runonfly(self, curui):
         if self._bmock:
             self._uinterface.wait_message(self._get_message("runWithoutInstallationStarting"))
@@ -2173,7 +2230,7 @@ class Install:
             self._step_runonfly_conn_msg("MOCK","MOCK")
             while self._runWithoutInstallAgentAlive:
                 time.sleep(1)
-            return ui.Message(self._get_message('runWithoutInstallationEnd')) 
+            return ui.Message(self._get_message("runWithoutInstallationEnd")) 
         
         #Prepare file
         self._append_log(u"Prepare file...")
@@ -2185,29 +2242,29 @@ class Install:
         
         #Start agent
         if self._proxy is not None:
-            prpconf = self.load_prop_json(self._install_path.get() + utils.path_sep +  u'config.json')
+            prpconf = self.load_prop_json(self._install_path.get() + utils.path_sep +  u"config.json")
             if self._proxy.get_type() is not None:
-                prpconf['proxy_type'] = self._proxy.get_type()
+                prpconf["proxy_type"] = self._proxy.get_type()
             if self._proxy.get_host() is not None:
-                prpconf['proxy_host'] = self._proxy.get_host()
+                prpconf["proxy_host"] = self._proxy.get_host()
             if self._proxy.get_port() is not None:
-                prpconf['proxy_port'] = self._proxy.get_port()
+                prpconf["proxy_port"] = self._proxy.get_port()
             if self._proxy.get_user() is not None:
-                prpconf['proxy_user'] = self._proxy.get_user()
+                prpconf["proxy_user"] = self._proxy.get_user()
             else:
-                prpconf['proxy_user'] = ""
+                prpconf["proxy_user"] = ""
             if self._proxy.get_password() is not None:
-                prpconf['proxy_password'] = self.obfuscate_password(self._proxy.get_password())
+                prpconf["proxy_password"] = self.obfuscate_password(self._proxy.get_password())
             else:
-                prpconf['proxy_password'] = ""
-            self.store_prop_json(prpconf, self._install_path.get() + utils.path_sep +  u'config.json')
+                prpconf["proxy_password"] = ""
+            self.store_prop_json(prpconf, self._install_path.get() + utils.path_sep +  u"config.json")
         
-        if curui.get_key() is not None and curui.get_key()=='retryRunOnFly':
-            if curui.get_variable().get()=='configProxy':
-                curui.set_key('runonfly')
+        if curui.get_key() is not None and curui.get_key()=="retryRunOnFly":
+            if curui.get_variable().get()=="configProxy":
+                curui.set_key("runonfly")
                 return self.step_configure_proxy_type(curui)
         
-        self._append_log(u"Changing current directory to " + utils.path_absname(self._install_path.get()) + " ...")
+        self._append_log(u"Changing current directory to " + utils.path_absname(self._install_path.get()) + u" ...")
         utils.system_changedir(self._install_path.get())
         self._runWithoutInstallAgentCloseEnd=False
         runcode_notfound=False
@@ -2223,7 +2280,7 @@ class Install:
                     self._runonfly_update(u"update",".")
                     utils.path_remove(u"update")
             
-                #COMPATIBILITA' VERSIONI PRECEDENTI DI RUNONFLY
+                #COMPATIBILITY OLD VERSIONS OF RUNONFLY
                 if self._fix_runonfly_old_version():
                     if utils.path_exists(u"update"):
                         self._uinterface.wait_message(self._get_message("runWithoutInstallationUpdating"))
@@ -2240,29 +2297,30 @@ class Install:
                 if utils.path_exists(u"dwagent.status"):
                     utils.path_remove(u"dwagent.status")
                 
-                #Scrive pid
-                f = utils.file_open(u"dwagent.pid", 'wb')
+                #Write pid
+                f = utils.file_open(u"dwagent.pid", "wb")
                 f.write(utils.str_to_bytes(str(os.getpid())))
                 f.close()            
                  
-                #Avvia il servizio
+                #Start service
                 self._append_log(u"Run... ")
                 if "runputcode" in self._options and self._options["runputcode"]:
                     ponfly=self._native.start_runonfly(self._run_code.get())
                 else:
                     ponfly=self._native.start_runonfly(None)
-                #Attende L'avvio
+                
+                #Wait the start
                 cnt=0
                 while (not utils.path_exists(u"dwagent.start")):
                     time.sleep(1)
                     cnt+=1
-                    if cnt>10: #10 Secondi
-                        raise Exception("") #GESTITO SOTTO
+                    if cnt>10: #10 Seconds
+                        raise Exception("")
                 if utils.path_exists(u"dwagent.start"):
                     utils.path_remove(u"dwagent.start")
                 self._append_log(u"Started.")
                 
-                #GESTISCE STATO
+                #Handle the status
                 pstipc = ipc.Property()
                 pstipc.open("runonfly")
                 agpid=int(pstipc.get_property("pid"))
@@ -2302,21 +2360,21 @@ class Install:
                 if runcode_notfound==False:
                     self._uinterface.wait_message(self._get_message("runWithoutInstallationClosing"))
                 
-                f = utils.file_open(u"dwagent.stop", 'wb')
+                f = utils.file_open(u"dwagent.stop", "wb")
                 f.close()
                 cnt=0
                 while self._native.is_task_running(agpid) and (ponfly is None or ponfly.poll() is None):
                     time.sleep(1)
                     cnt+=1
-                    if cnt>5: #5 Secondi
+                    if cnt>10: #10 Seconds
                         break
-                
                 pstipc.close()
                 pstipc=None
                 time.sleep(1)
+                                
                 
         except Exception as e:
-            f = utils.file_open(u"dwagent.stop", 'wb')
+            f = utils.file_open(u"dwagent.stop", "wb")
             f.close()
             try:
                 if pstipc is not None:
@@ -2326,25 +2384,25 @@ class Install:
                 None
             utils.system_changedir(self._current_path)
             self._runWithoutInstallAgentCloseEnd=True
-            #Se non è partito l'agente potrebbe dipendere da un problema di file corrotti
+            #If does not start it could be depend by corrupted files
             self._append_log(u"Error: " + utils.exception_to_string(e) + u"\n" + utils.get_stacktrace_string())
             return ui.Message(self._get_message("runWithoutInstallationUnexpectedError").format(utils.path_absname(self._install_path.get())) + "\n\n" + utils.exception_to_string(e))
             
         
         utils.system_changedir(self._current_path)
         self._runWithoutInstallAgentCloseEnd=True
-        if self._runWithoutInstallAgentCloseByClient:            
-            return ui.Message(self._get_message('runWithoutInstallationEnd'))  
+        if self._runWithoutInstallAgentCloseByClient:
+            return ui.Message(self._get_message("runWithoutInstallationEnd"))  
         else:
             self._runWithoutInstallAgentAlive=True
             if runcode_notfound:
-                return ui.ErrorDialog(self._get_message('errorInvalidCode'))                
+                return ui.ErrorDialog(self._get_message("errorInvalidCode"))                
             else:
                 chs = ui.Chooser()
                 chs.set_key("retryRunOnFly")
-                chs.set_message(self._get_message('errorConnectionQuestion'))
-                chs.add("configProxy", self._get_message('yes'))
-                chs.add("noTryAgain", self._get_message('noTryAgain'))
+                chs.set_message(self._get_message("errorConnectionQuestion"))
+                chs.add("configProxy", self._get_message("yes"))
+                chs.add("noTryAgain", self._get_message("noTryAgain"))
                 chs.set_variable(ui.VarString("noTryAgain"))
                 chs.next_step(self.step_runonfly)
                 return chs
@@ -2359,38 +2417,40 @@ class Install:
             
         if not self._silent:
             if curui.get_key() is None and curui.get_variable().get()=="no":
-                return ui.Message(self._get_message('cancelInstall'))
+                return ui.Message(self._get_message("cancelInstall"))
             
-            if curui.get_key() is not None and curui.get_key()=='retryDownload':
-                if curui.get_variable().get()=='configProxy':
-                    curui.set_key('install')
+            if curui.get_key() is not None and curui.get_key()=="retryDownload":
+                if curui.get_variable().get()=="configProxy":
+                    curui.set_key("install")
                     return self.step_configure_proxy_type(curui)
-        
+                if curui.get_variable().get()=="skipCertsValidity":
+                    self._skipcertsvalidity=True
+                    communication.set_cacerts_path("")
         
         if self._runWithoutInstall:
             if self._name is None:
                 self._install_path.set(u".." + utils.path_sep + u"dwagentonfly")
             else:
                 self._install_path.set(u".." + utils.path_sep + self._name.lower() + u"onfly")
-            #Carica proxy da file
+            #load proxy from file
             if self._runWithoutInstallProxySet==False and utils.path_exists(self._install_path.get() + utils.path_sep + u"config.json"):
                 self._runWithoutInstallProxySet=True
                 prpconf=self.load_prop_json(self._install_path.get() + utils.path_sep + u"config.json")
-                if 'proxy_type' in prpconf and prpconf['proxy_type']!="":
+                if "proxy_type" in prpconf and prpconf["proxy_type"]!="":
                     self._proxy=communication.ProxyInfo()
-                    self._proxy.set_type(prpconf['proxy_type'])
-                    self._proxy_type.set(prpconf['proxy_type'])
-                    if 'proxy_host' in prpconf:
-                        self._proxy.set_host(prpconf['proxy_host'])
-                        self._proxy_host.set(prpconf['proxy_host'])
-                    if 'proxy_port' in prpconf and prpconf['proxy_port']!="":
-                        self._proxy.set_port(prpconf['proxy_port'])
-                        self._proxy_port.set(str(prpconf['proxy_port']))
-                    if 'proxy_user' in prpconf:
-                        self._proxy.set_user(prpconf['proxy_user'])
-                        self._proxy_user.set(prpconf['proxy_user'])
-                    if 'proxy_password' in prpconf and prpconf['proxy_password']!="":
-                        self._proxy.set_password(self.obfuscate_password(prpconf['proxy_password']))
+                    self._proxy.set_type(prpconf["proxy_type"])
+                    self._proxy_type.set(prpconf["proxy_type"])
+                    if "proxy_host" in prpconf:
+                        self._proxy.set_host(prpconf["proxy_host"])
+                        self._proxy_host.set(prpconf["proxy_host"])
+                    if "proxy_port" in prpconf and prpconf["proxy_port"]!="":
+                        self._proxy.set_port(prpconf["proxy_port"])
+                        self._proxy_port.set(str(prpconf["proxy_port"]))
+                    if "proxy_user" in prpconf:
+                        self._proxy.set_user(prpconf["proxy_user"])
+                        self._proxy_user.set(prpconf["proxy_user"])
+                    if "proxy_password" in prpconf and prpconf["proxy_password"]!="":
+                        self._proxy.set_password(self.read_obfuscated_password(prpconf["proxy_password"]))
         
         if self._silent: 
             #SETUP PROXY
@@ -2414,32 +2474,32 @@ class Install:
             if self._runWithoutInstall and not utils.path_exists(pth):
                 utils.path_makedir(pth)
                 
-        #Inizializza log
+        #Init log
         if not self._bmock:
             if self._install_log is None:
                 try:
                     if self._install_log_path is not None:
                         try:
-                            self._install_log = utils.file_open(self._install_log_path, "wb", encoding='utf-8')
+                            self._install_log = utils.file_open(self._install_log_path, "wb", encoding="utf-8")
                         except:
                             None
                     if self._install_log is None:
-                        self._install_log = utils.file_open(u'install.log', "wb", encoding='utf-8')
+                        self._install_log = utils.file_open(u"install.log", "wb", encoding="utf-8")
                 except:
                     try:
-                        self._install_log = utils.file_open(u".." + utils.path_sep + u'dwagent_install.log', "wb", encoding='utf-8')                    
+                        self._install_log = utils.file_open(u".." + utils.path_sep + u"dwagent_install.log", "wb", encoding="utf-8")                    
                     except:
                         None
             
         
         self._install_path.set(utils.str_new(pth))
-        #Imposta path per native
+        #set native path
         self._native.set_install_path(utils.str_new(pth))
         self._native.set_install_log(self._install_log)
             
             
         try:
-            #Verifica permessi di amministratore (SOLO se silent altrimenti gia' lo ha fatto precedentemente
+            #Check admin permission (ONLY if silent else already did previous)
             if self._silent: 
                 msg = self._native.check_init_install(True)
                 if msg is not None:
@@ -2451,13 +2511,13 @@ class Install:
         
             
             if not self._runWithoutInstall:
-                if curui.get_key()!='retryDownload' and curui.get_key()!='retryDownloadProxy':
+                if curui.get_key()!="retryDownload" and curui.get_key()!="retryDownloadProxy":
                     #Crea cartella
                     self._append_log(u"Make folder " + pth + u"...")
                     self._make_directory(0.01, 0.02)
                     self._append_log(u"Make folder " + pth + u".OK!")
                                         
-            #Copia Licenza
+            #Copy License
             if not self._bmock:
                 pthlic = self._install_path.get() + utils.path_sep + u"LICENSES"
                 if not utils.path_exists(pthlic):
@@ -2476,77 +2536,85 @@ class Install:
                     self._download_files(0.01, 0.9)
                 self._append_log(u"Download files.OK!")
             except Exception as e:
-                if not self._silent:
-                    self._append_log(u"Error Download files: " + utils.exception_to_string(e) + u"\n" + utils.get_stacktrace_string())
-                    chs = ui.Chooser()
-                    chs.set_key("retryDownload")
-                    chs.set_message(utils.exception_to_string(e) + u"\n\n" + self._get_message('errorConnectionQuestion'))
-                    chs.add("configProxy", self._get_message('yes'))
-                    chs.add("noTryAgain", self._get_message('noTryAgain'))
-                    chs.set_variable(ui.VarString("noTryAgain"))
-                    if not self._runWithoutInstall:
-                        chs.prev_step(self.step_check_install_path)
+                se=utils.exception_to_string(e)                
+                if se=="#NOTSUPPORTED":
+                    raise Exception(self._get_message("installerNotSupported"))                    
+                elif se=="#SILENTFORBIDDEN":
+                    raise Exception("Silent installation forbidden. Please contact the support.")
+                else:                
+                    if not self._silent:
+                        self._append_log(u"Error Download files: " + se + u"\n" + utils.get_stacktrace_string())
+                        chs = ui.Chooser()
+                        chs.set_key("retryDownload")
+                        if u"CERTIFICATE_VERIFY_FAILED" in se:
+                            self._skipcertsvalidity=False
+                            communication.set_cacerts_path("cacerts.pem")
+                            chs.set_message(self._get_message("skipCertValidation"))
+                            chs.add("skipCertsValidity", self._get_message("yes"))
+                            chs.add("noTryAgain", self._get_message("noTryAgain"))
+                            chs.add("configProxy", self._get_message("configureProxy"))
+                            chs.set_variable(ui.VarString("noTryAgain"))
+                        else:                        
+                            chs.set_message(se + u"\n" + self._get_message("errorConnectionQuestion"))
+                            chs.add("configProxy", self._get_message("yes"))
+                            chs.add("noTryAgain", self._get_message("noTryAgain"))
+                            chs.set_variable(ui.VarString("noTryAgain"))
+                        if not self._runWithoutInstall:
+                            chs.prev_step(self.step_check_install_path)
+                        else:
+                            chs.prev_step(self.step_init)
+                            self._install_path.set(None)
+                        chs.next_step(self.step_install)
+                        return chs
                     else:
-                        chs.prev_step(self.step_init)
-                        self._install_path.set(None)
-                    chs.next_step(self.step_install)
-                    return chs
-                else:
-                    raise Exception(u"Error Download files: " + utils.exception_to_string(e) + u"\n" + utils.get_stacktrace_string())
+                        raise Exception(u"Error Download files: " + se + u"\n" + utils.get_stacktrace_string())
             
             if not self._runWithoutInstall:
-                #Copia Runtime
                 self._append_log(u"Copy runtime...")
                 self.copy_runtime(0.51, 0.75)
                 self._append_log(u"Copy runtime.OK!")
-                #Copia Native
+                
                 self._append_log(u"Copy native...")
                 self.copy_native(0.76, 0.8)           
                 self._append_log(u"Copy native.OK!")
-                #Prepare file
+                
                 self._append_log(u"Prepare file...")
                 if not self._bmock:
                     self._native.prepare_file()
                 self._append_log(u"Prepare file.OK!")
                 
-                #Installa Servizio
                 self._append_log(u"Install service...")
                 self._install_service(0.81, 0.85)
                 self._append_log(u"Install service.OK!")
                 
-                #Installa Monitor
                 self._append_log(u"Install monitor...")
                 self._install_monitor(0.86, 0.90)
                 self._append_log(u"Install monitor.OK!")
                 
-                #Installa Shortcuts
                 self._append_log(u"Install Shortcuts...")
                 self._install_shortcuts(0.91,  1)
                 self._append_log(u"Install Shortcuts.OK!")
                 
-                #Installazioni specifiche per os
                 self._append_log(u"Install Extra OS...")
                 if not self._bmock:
                     self._native.install_extra()
                 self._append_log(u"Install Extra OS.OK!")
                 
-                #Inizia la configurazione
                 if not self._silent:
-                    curui.set_param('firstConfig',True)
+                    curui.set_param("firstConfig",True)
                     return self.step_config_init(curui)
                 else:
-                    curui.set_param('firstConfig',False)
+                    curui.set_param("firstConfig",False)
                     if self._proxy is not None:
                         self._send_proxy_config()
                     self._send_password_config()
                     return self.step_config_install_request(curui)
                 
             else:
-                #Aggiorna cacerts.pem
+                #Update cacerts.pem
                 if not self._bmock:
-                    utils.path_copy('cacerts.pem',self._install_path.get() + utils.path_sep + 'cacerts.pem')
+                    utils.path_copy("cacerts.pem",self._install_path.get() + utils.path_sep + "cacerts.pem")
                 
-                #Copia Native
                 self._append_log(u"Copy native...")
                 self.copy_native(0.91, 1)
                 self._append_log(u"Copy native.OK!")
@@ -2562,6 +2630,7 @@ class Install:
             
 
 class Uninstall:
+    
     def __init__(self):
         self._native = get_native()
         self._uinterface=None
@@ -2606,7 +2675,7 @@ class Uninstall:
             self._native.set_name(self._name)
         else:
             self._native.set_name(u"DWAgent")
-        prmsui["title"]=self._get_message('titleUninstall')
+        prmsui["title"]=self._get_message("titleUninstall")
         if "topinfo" in confjson:
             prmsui["topinfo"]=confjson["topinfo"]
         if "topimage" in confjson:
@@ -2617,7 +2686,8 @@ class Uninstall:
         if "leftcolor" in confjson:
             prmsui["leftcolor"]=confjson["leftcolor"]
         self._uinterface = ui.UI(prmsui, self.step_init)
-        self._uinterface.start(bgui)
+        self._native.set_uinterface(self._uinterface)
+        self._uinterface.start(bgui)        
         
         #CHIUDE IL LOG
         try:
@@ -2632,15 +2702,15 @@ class Uninstall:
             return ui.Message(msg)
         self._install_path = self._native.get_install_path()
         if self._install_path is None:
-            return ui.Message(self._get_message('notInstalled'))
+            return ui.Message(self._get_message("notInstalled"))
         else:
             if self._silent==False:
                 self._install_path = utils.str_new(self._install_path)
                 #Conferma disinstallazione
                 chs = ui.Chooser()
-                chs.set_message(self._get_message('confirmUninstall'))
-                chs.add("yes", self._get_message('yes'))
-                chs.add("no", self._get_message('no'))
+                chs.set_message(self._get_message("confirmUninstall"))
+                chs.add("yes", self._get_message("yes"))
+                chs.add("no", self._get_message("no"))
                 chs.set_variable(ui.VarString("no"))
                 chs.set_accept_key("yes")
                 chs.next_step(self.step_remove)
@@ -2649,26 +2719,26 @@ class Uninstall:
                 return self.step_remove(curui)
     
     def _uninstall_monitor(self, pstart, pend):
-        msg=self._get_message('uninstallMonitor')
+        msg=self._get_message("uninstallMonitor")
         self._uinterface.wait_message(msg,  None, pstart)
         stop_monitor(self._install_path)
         self._native.remove_auto_run_monitor()
     
     def _uninstall_service(self, pstart, pend):
-        msg=self._get_message('uninstallService')
+        msg=self._get_message("uninstallService")
         self._uinterface.wait_message(msg,  None, pstart)
         self._native.stop_service()
         self._native.delete_service()
     
     def _uninstall_shortcuts(self, pstart, pend):
-        msg=self._get_message('uninstallShortcuts')
+        msg=self._get_message("uninstallShortcuts")
         self._uinterface.wait_message(msg,  None, pstart)
         self._native.remove_shortcuts()
     
     def _append_log(self, txt):
         try:
             if self._install_log is not None:
-                self._install_log.write(utils.str_new(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())) + u" - " + txt + u"\n")
+                self._install_log.write(utils.str_new(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())) + u" - " + txt + u"\n")
                 self._install_log.flush()
         except:
             None   
@@ -2676,14 +2746,14 @@ class Uninstall:
     def step_remove(self, curui):
         if self._silent==False:
             if curui.get_key() is None and curui.get_variable().get()=="no":
-                return ui.Message(self._get_message('cancelUninstall'))
+                return ui.Message(self._get_message("cancelUninstall"))
         try:
             #Inizializza log
             try:
-                self._install_log = utils.file_open(u"unistall.log", "wb", encoding='utf-8')
+                self._install_log = utils.file_open(u"unistall.log", "wb", encoding="utf-8")
             except:
                 try:
-                    self._install_log = utils.file_open(u".." + utils.path_sep + u"dwagent_unistall.log", "wb", encoding='utf-8')                    
+                    self._install_log = utils.file_open(u".." + utils.path_sep + u"dwagent_unistall.log", "wb", encoding="utf-8")                    
                 except:
                     None
             
@@ -2705,7 +2775,7 @@ class Uninstall:
             f.close()
 
             self._append_log(u"End Uninstallation.")
-            return ui.Message(self._get_message('endUninstall'))
+            return ui.Message(self._get_message("endUninstall"))
         except Exception as e:
             self._append_log(u"Error Uninstall: " + utils.exception_to_string(e))
             return ui.ErrorDialog(utils.exception_to_string(e))
@@ -2731,7 +2801,9 @@ def fmain(args): #SERVE PER MACOS APP
         elif arg.lower().startswith("password="):
             arotps["password"]=arg[9:]
         elif arg.lower().startswith("name="):
-            arotps["agentName"]=arg[5:]            
+            arotps["agentName"]=arg[5:]
+        elif arg.lower().startswith("group="):
+            arotps["agentGroup"]=arg[6:]
         elif arg.lower().startswith("proxytype="):            
             arotps["proxyType"]=arg[10:]
         elif arg.lower().startswith("proxyhost="):            

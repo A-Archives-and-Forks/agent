@@ -78,7 +78,7 @@ data={
     'error':u'Erreur',
     'errorAgentAlreadyExsists':u'L\'agent {0} existe déjà.',
     'errorAgentMax':u'Le nombre maximum d\'agents est atteint.',
-    'errorAgentNameNotValid':u'Le nom de l\'agent n\'est pas valide. Vous ne pouvez pas utiliser les caractères / \ | # @ : .',
+    'errorAgentNameNotValid':u'Le nom de l\'agent n\'est pas valide. Vous ne pouvez pas utiliser les caractères / \\ | # @ : .',
     'errorConnectionConfig':u'Erreur de connexion. Veuillez vérifier que le service DWAgent est démarré.',
     'errorConnectionQuestion':u'Erreur de connexion. Veuillez vérifier votre connexion internet ou la configuration de votre pare-feu.\nVoulez-vous configurer un serveur mandataire (proxy) ?',
     'errorInvalidCode':u'Le code saisi est incorrect.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'L\'installation du service a échoué.',
     'installShortcuts':u'Installation des raccourcis...',
     'installShortcutsErr':u'L\'installation des raccourcis a échoué.',
+    'installerNotSupported':u'Ce programme d\'installation n\'est plus pris en charge. Veuillez télécharger la dernière version.',
     'ipAddress':u'Adresse IP : {0}',
     'linuxRootPrivileges':u'Vous devez avoir les droits administrateur pour installer DWAgent.\nVeuillez démarrer le script en tant qu\'administrateur.',
     'menuConfigure':u'Configurer',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'En poursuivant l\'installation ou en exécutant ce logiciel, vous acceptez les #TERMSANDCONDITIONS et la #PRIVACYPOLICY',
     'welcomeSecurity':u'Sécurité\nPour protéger votre vie privée, nous garantissons qu\'aucune informations ne sera stockée sur nos serveurs et que les communications sont chiffrées afin que de tierces parties ne puissent y accéder.',
     'welcomeSoftwareUpdates':u'Mises à jour logiciel\nLes mises à jour de ce logiciel sont automatiques.',
+    'welcomeTermsAndConditions':u'En sélectionnant l\'option \'{0}\' ou \'{1}\', j\'accepte les #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Vous devez avoir les droits administrateur pour installer DWAgent.\nVeuillez démarrer l\'exécutable avec \'exécuter en tant qu\'administrateur\'.',
     'yes':u'Oui'
 }

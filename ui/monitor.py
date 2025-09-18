@@ -96,8 +96,9 @@ class NotifyAcceptSession():
     
     def __init__(self, prt):
         self._parent=prt
+        self._rtl=self._parent._rtl
         self._curitm=None
-        self._dlg = gdi.Window(gdi.WINDOW_TYPE_POPUP)
+        self._dlg = gdi.Window(gdi.WINDOW_TYPE_POPUP,isrtl=self._rtl)
         self._dlg.set_show_position(gdi.WINDOW_POSITION_CENTER_SCREEN);
         self._dlg_brdsz=1        
         self._dlg_w=340
@@ -112,21 +113,28 @@ class NotifyAcceptSession():
         self._pnl.set_size(self._dlg_w-(2*self._dlg_brdsz), self._dlg_h-(2*self._dlg_brdsz))
         self._pnl.set_background("f2f2f2")
         self._dlg.add_component(self._pnl)
-                
+        
         self._btn_accept = gdi.Button()
         self._btn_accept.set_text(messages.get_message("accept"))
-        self._btn_accept.set_position(gapbtn, self._dlg_h-hbtn-12)
+        if self._rtl:
+            self._btn_accept.set_position(gapbtn+wbtn+6, self._dlg_h-hbtn-12)
+        else:
+            self._btn_accept.set_position(gapbtn, self._dlg_h-hbtn-12)
         self._btn_accept.set_size(wbtn, hbtn)
         self._btn_accept.set_action(self._on_accept)
         self._pnl.add_component(self._btn_accept)
         
         self._btn_reject = gdi.Button()
         self._btn_reject.set_text(messages.get_message("reject"))
-        self._btn_reject.set_position(gapbtn+wbtn+6, self._dlg_h-hbtn-12)
+        if self._rtl:
+            self._btn_reject.set_position(gapbtn, self._dlg_h-hbtn-12)
+        else:
+            self._btn_reject.set_position(gapbtn+wbtn+6, self._dlg_h-hbtn-12)
         self._btn_reject.set_size(wbtn, hbtn)
         self._btn_reject.set_action(self._on_reject)
         self._pnl.add_component(self._btn_reject)
-        
+                
+        '''
         implogo = gdi.ImagePanel()
         implogo.set_position(10, 16)
         implogo.set_filename(self._parent._get_image(u"logo48x48.bmp"))
@@ -136,6 +144,27 @@ class NotifyAcceptSession():
         self._lbl_user.set_position(16+48,16)
         self._lbl_user.set_size(self._dlg_w-(2*self._dlg_brdsz)-16-48-10,20)
         self._pnl.add_component(self._lbl_user)
+        '''
+        
+        wimg=48
+        gapbimg=10
+        gapaimg=6
+        wlbl=self._dlg_w-(2*self._dlg_brdsz)-(gapbimg+wimg+gapaimg)
+        implogo = gdi.ImagePanel()
+        if self._rtl:
+            implogo.set_position(wlbl+gapaimg, 16)
+        else:
+            implogo.set_position(gapbimg, 16)
+        implogo.set_filename(self._parent._get_image(u"logo48x48.bmp"))
+        self._pnl.add_component(implogo)
+        
+        self._lbl_user = gdi.Label()
+        if self._rtl:
+            self._lbl_user.set_position(0,16)            
+        else:
+            self._lbl_user.set_position(gapbimg+wimg+gapaimg,16)            
+        self._lbl_user.set_size(wlbl,20)
+        self._pnl.add_component(self._lbl_user)
         
         self._lbl_ip = gdi.Label()
         self._lbl_ip.set_position(self._lbl_user.get_x(),self._lbl_user.get_y()+self._lbl_user.get_height())
@@ -143,7 +172,7 @@ class NotifyAcceptSession():
         self._pnl.add_component(self._lbl_ip)
         
         self._lbl_msg = gdi.Label()
-        self._lbl_msg.set_text_align(gdi.TEXT_ALIGN_LEFTTOP)
+        self._lbl_msg.set_text_align(gdi.TEXT_ALIGN_STARTTOP)
         self._lbl_msg.set_text(messages.get_message("accessConfirm"))
         self._lbl_msg.set_wordwrap(True)
         self._lbl_msg.set_position(self._lbl_ip.get_x(),self._lbl_ip.get_y()+self._lbl_ip.get_height()+4)
@@ -228,7 +257,7 @@ class NotifyActivities():
         self._move_y=None
         self._skip_click=False
         self._hide_effect=None
-        self._dlg = gdi.Window(gdi.WINDOW_TYPE_POPUP)
+        self._dlg = gdi.Window(gdi.WINDOW_TYPE_POPUP,isrtl=self._parent._rtl)
         self._dlg.set_background("ffaa33")
         self._pnl = gdi.Panel()
         self._pnl.set_position(1, 1)      
@@ -340,9 +369,13 @@ class Main():
         self._properties={}
         self._config_base_path=None
         self._runonfly_base_path=None
-        self._bstop=True        
+        self._bstop=True
         self._notifyActivities=None
         self._notifyAcceptSession=None
+        try:
+            self._rtl=messages.is_rtl()
+        except:
+            self._rtl=False
         try:
             f = utils.file_open('config.json', "rb")
             s=f.read()
@@ -700,10 +733,10 @@ class Main():
     
     def update_unattended(self):
         try:
-            sua=self.get_config("unattended_access")  
+            sua=self.get_config("unattended_access") 
             self._lbl_unattended_mode_yes.set_selected(sua=="True")
-            self._lbl_unattended_mode_no.set_selected(sua!="True")                    
-        except:
+            self._lbl_unattended_mode_no.set_selected(sua!="True")                                
+        except Exception as e:
             self._lbl_unattended_mode_yes.set_selected(False)
             self._lbl_unattended_mode_no.set_selected(False)
 
@@ -749,7 +782,7 @@ class Main():
             if sret!="OK":
                 raise Exception(sret[6:])                
         except Exception as e:
-            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
             dlg.set_title(self._get_message('monitorTitle'))
             dlg.set_message(utils.exception_to_string(e))
             dlg.show();
@@ -760,7 +793,7 @@ class Main():
             if sret!="OK":
                 raise Exception(sret[6:])                
         except Exception as e:
-            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
             dlg.set_title(self._get_message('monitorTitle'))
             dlg.set_message(utils.exception_to_string(e))
             dlg.show();
@@ -779,12 +812,12 @@ class Main():
                 mess_ok='monitorAgentEnabled'
             if self.check_auth(pwd):
                 self.set_config(pwd, "enabled", val)
-                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app)
+                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app,isrtl=self._rtl)
                 dlg.set_title(self._get_message('monitorTitle'))
                 dlg.set_message(self._get_message(mess_ok))
                 dlg.show();
             else:
-                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
                 dlg.set_title(self._get_message('monitorTitle'))
                 dlg.set_message(self._get_message('monitorInvalidPassword'))
                 dlg.show();            
@@ -800,20 +833,24 @@ class Main():
                 pwd = ""
                 if self.check_auth(pwd):
                     self.set_config(pwd, "enabled", val)
-                    dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app)
+                    dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app,isrtl=self._rtl)
                     dlg.set_title(self._get_message('monitorTitle'))
                     dlg.set_message(self._get_message(mess_ok))
                     dlg.show();
                 else:
                     self.ask_password(self._enable_disable_action_pwd)
             except Exception as e:
-                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
                 dlg.set_title(self._get_message('monitorTitle'))
                 dlg.set_message(utils.exception_to_string(e))
                 dlg.show();
     
     def ask_password(self, faction):
-        dlg = gdi.Window(gdi.WINDOW_TYPE_DIALOG, self._app)
+        dlg = gdi.Window(gdi.WINDOW_TYPE_DIALOG, self._app, isrtl=self._rtl)
+        def fdlgact(e):
+            if e["action"]=="ONCLOSE":
+                faction(e)
+        dlg.set_action(fdlgact)
         dlg.set_title(self._get_message('monitorTitle'))
         dlg.set_size(220, 140)
         dlg.set_show_position(gdi.WINDOW_POSITION_CENTER_SCREEN)
@@ -836,7 +873,7 @@ class Main():
         bt = gdi.Button();
         bt.set_position(int((dlg.get_width()/2)-(bt.get_width()/2)), 10)
         bt.set_text(self._get_message('ok'))
-        bt.set_action(faction)
+        bt.set_action(faction)        
         pnl.add_component(bt)
         dlg.show()
     
@@ -854,18 +891,20 @@ class Main():
                 self.set_config("", "unattended_access", val)
             else:           
                 self.update_unattended()     
-                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+                dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
                 dlg.set_title(self._get_message('monitorTitle'))
                 dlg.set_message(self._get_message('monitorInvalidPassword'))
                 dlg.show();   
+        elif e["action"]=="ONCLOSE":
+            self.update_unattended()
     
     def set_unattended_access(self, e):
         if e["action"]=="SELECTED":
-            val="false"
-            if e["source"]==self._lbl_unattended_mode_yes:
-                val="true"                
             pwd = ""
             if self.check_auth(pwd):
+                val="false"
+                if e["source"]==self._lbl_unattended_mode_yes:
+                    val="true"
                 self.set_config("", "unattended_access", val)                
             else:
                 self.ask_password(self._set_unattended_access_pwd)        
@@ -876,7 +915,7 @@ class Main():
             if self._cur_status=="DISABLE":
                 msg=self._get_message('monitorEnableAgentQuestion')
             
-            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app)
+            dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_INFO,self._app,isrtl=self._rtl)
             dlg.set_title(self._get_message('monitorTitle'))
             dlg.set_message(msg)
             dlg.set_action(self._enable_disable_action)
@@ -891,12 +930,13 @@ class Main():
             elif is_mac():
                 #KEEP FOR COMPATIBILITY
                 if utils.path_exists("native/Configure.app/Contents/MacOS/Configure"):
-                    self._runproc(["native/Configure.app/Contents/MacOS/Configure"])
+                    self._runproc(["open", "-a", os.path.abspath("native/Configure.app")])
+                    #self._runproc(["native/Configure.app/Contents/MacOS/Configure"])
                 else:
                     self._runproc(["native/Configure.app/Contents/MacOS/Run"])            
             
     def run_update(self):
-        #Lancia se stesso perche con il file monitor.update attende che le librerie si aggiornano
+        #run self  because the monitor.update file wait library update
         if is_windows():
             subprocess.call(["native" + utils.path_sep + "dwaglnc.exe" , "systray"]) 
         elif is_linux():
@@ -922,7 +962,7 @@ class Main():
                             libenv[k]=osenv[k]
                     subprocess.Popen([sucmd , utils.path_absname("native" + utils.path_sep + "uninstall")],env=libenv)
                 else:
-                    dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app)
+                    dlg = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,self._app,isrtl=self._rtl)
                     dlg.set_title(self._get_message('monitorTitle'))
                     dlg.set_message(self._get_message('monitorUninstallNotRun'))
                     dlg.show();
@@ -1042,33 +1082,35 @@ class Main():
     
     def prepare_window(self):        
         #msgst=self._get_message('monitorStatusNoService')        
-        
-        self._app = gdi.Window(gdi.WINDOW_TYPE_NORMAL_NOT_RESIZABLE,None,self._logo);
+                
+        self._app = gdi.Window(gdi.WINDOW_TYPE_NORMAL_NOT_RESIZABLE,None,self._logo,isrtl=self._rtl);
         self._app.set_title(self._get_message('monitorTitle'))
         self._app.set_size(_WIDTH, _HEIGHT)
         self._app.set_show_position(gdi.WINDOW_POSITION_CENTER_SCREEN)
         self._app.set_action(self._window_action)
-                
         
+        if self._rtl:
+            gapx=_WIDTH_RIGHT
+        else:
+            gapx=0
+                
         self._img_status_top = gdi.Panel()
-        self._img_status_top.set_position(0, 0)
+        self._img_status_top.set_position(gapx, 0)
         self._img_status_top.set_size(_CONTENT_WIDTH, _HEIGHT_STATUS_BAR)
         self._img_status_top.set_background_gradient("ffffff", "ffffff", gdi.GRADIENT_DIRECTION_TOPBOTTOM)
-        self._app.add_component(self._img_status_top)
-        
+        self._app.add_component(self._img_status_top)        
         
         self._lbl_status = gdi.Label()
         self._lbl_status.set_background("ffffff")
         self._lbl_status.set_opaque(True)
         self._lbl_status.set_text_align(gdi.TEXT_ALIGN_CENTERMIDDLE)
         self._lbl_status.set_text(self._get_message('waiting'))
-        self._lbl_status.set_position(0, _HEIGHT_STATUS_BAR)
-        #self._lbl_status.set_size(_CONTENT_WIDTH,int((_HEIGHT-(2*_HEIGHT_STATUS_BAR))/2.8))
+        self._lbl_status.set_position(gapx, _HEIGHT_STATUS_BAR)        
         self._lbl_status.set_size(_CONTENT_WIDTH,_HEIGHT_STATUS)        
         self._app.add_component(self._lbl_status)
         
         self._img_status_bottom = gdi.Panel()
-        self._img_status_bottom.set_position(0, self._lbl_status.get_y() + self._lbl_status.get_height())
+        self._img_status_bottom.set_position(gapx, self._lbl_status.get_y() + self._lbl_status.get_height())
         self._img_status_bottom.set_size(_CONTENT_WIDTH,_HEIGHT_STATUS_BAR)
         self._img_status_bottom.set_background_gradient("ffffff", "ffffff", gdi.GRADIENT_DIRECTION_BOTTONTOP)
         self._app.add_component(self._img_status_bottom)
@@ -1077,30 +1119,42 @@ class Main():
         self._lbl_notificationst.set_background("d9d9d9")
         self._lbl_notificationst.set_opaque(True)
         self._lbl_notificationst.set_text_align(gdi.TEXT_ALIGN_CENTERMIDDLE)
-        self._lbl_notificationst.set_text(self._get_message('monitorCurrentActivities'))
-        self._lbl_notificationst.set_position(0, self._img_status_bottom.get_y() + self._img_status_bottom.get_height())
+        self._lbl_notificationst.set_text(self._get_message('monitorCurrentActivities'))        
+        self._lbl_notificationst.set_position(gapx, self._img_status_bottom.get_y() + self._img_status_bottom.get_height())
         self._lbl_notificationst.set_size(_CONTENT_WIDTH,25)
         self._app.add_component(self._lbl_notificationst)
+        
+        sthalfy=self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height()
+        sthalfw=int(_CONTENT_WIDTH/2)
+        sthalfh=_HEIGHT-sthalfy
         
         self._lbl_notificationsl = gdi.Label()
         self._lbl_notificationsl.set_background("ffffff")
         self._lbl_notificationsl.set_opaque(True)
-        self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)
-        self._lbl_notificationsl.set_position(0, self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height())
-        self._lbl_notificationsl.set_size(int(_CONTENT_WIDTH/2),_HEIGHT-(self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height()))
+        if self._rtl:
+            self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
+            self._lbl_notificationsl.set_position(gapx+sthalfw, sthalfy)
+        else:
+            self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)
+            self._lbl_notificationsl.set_position(gapx, sthalfy)
+        self._lbl_notificationsl.set_size(sthalfw,sthalfh)
         self._app.add_component(self._lbl_notificationsl)
         
         self._lbl_notificationsr = gdi.Label()
         self._lbl_notificationsr.set_background("ffffff")
         self._lbl_notificationsr.set_opaque(True)
-        self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
-        self._lbl_notificationsr.set_position(int(_CONTENT_WIDTH/2), self._lbl_notificationsl.get_y())
-        self._lbl_notificationsr.set_size(self._lbl_notificationsl.get_width(),self._lbl_notificationsl.get_height())
+        if self._rtl:
+            self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)
+            self._lbl_notificationsr.set_position(gapx,sthalfy)
+        else:
+            self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
+            self._lbl_notificationsr.set_position(gapx+sthalfw,sthalfy)
+        self._lbl_notificationsr.set_size(sthalfw,sthalfh)
         self._app.add_component(self._lbl_notificationsr)
         
         self._lbl_notificationsn = gdi.Label()
         self._lbl_notificationsn.set_background("ffffff")
-        self._lbl_notificationsn.set_position(0,self._lbl_notificationsl.get_y()+(int(self._lbl_notificationsl.get_height()/2)-(26/2)))
+        self._lbl_notificationsn.set_position(gapx,self._lbl_notificationsl.get_y()+(int(self._lbl_notificationsl.get_height()/2)-(26/2)))
         self._lbl_notificationsn.set_text(self._get_message('monitorNoActivities'))
         self._lbl_notificationsn.set_text_align(gdi.TEXT_ALIGN_CENTERMIDDLE)
         self._lbl_notificationsn.set_size(_CONTENT_WIDTH,26)
@@ -1108,7 +1162,10 @@ class Main():
         self._app.add_component(self._lbl_notificationsn)
                 
         self._pnl_bottom = gdi.Panel()
-        self._pnl_bottom.set_position(_CONTENT_WIDTH, 0)
+        if self._rtl:
+            self._pnl_bottom.set_position(0, 0)
+        else:
+            self._pnl_bottom.set_position(_CONTENT_WIDTH, 0)
         self._pnl_bottom.set_size(_WIDTH_RIGHT, _HEIGHT)
         self._app.add_component(self._pnl_bottom)
         
@@ -1144,6 +1201,7 @@ class Main():
         
         hunm=40
         gapunm=80
+        wum = int(wbtn/2)
         self._lbl_unattended_mode = gdi.Label()
         self._lbl_unattended_mode.set_position(10, appy+gapunm)
         self._lbl_unattended_mode.set_text(self._get_message('unattendedAccess'))
@@ -1151,11 +1209,14 @@ class Main():
         self._lbl_unattended_mode.set_size(wbtn, hunm)
         self._lbl_unattended_mode.set_enable(False);
         self._pnl_bottom.add_component(self._lbl_unattended_mode)
-        appy+=gapunm+hunm
-        
+        appy+=gapunm+hunm        
         self._lbl_unattended_mode_yes = gdi.RadioButton()
         self._lbl_unattended_mode_yes.set_group("unattendedaccess")
-        self._lbl_unattended_mode_yes.set_position(10, appy)
+        if self._rtl:
+            self._lbl_unattended_mode_yes.set_position(10+wum, appy)
+        else:
+            self._lbl_unattended_mode_yes.set_position(10, appy)
+        self._lbl_unattended_mode_yes.set_size(wum,hunm)        
         self._lbl_unattended_mode_yes.set_text(self._get_message('yes'))
         self._lbl_unattended_mode_yes.set_enable(False);
         self._lbl_unattended_mode_yes.set_action(self.set_unattended_access)
@@ -1163,7 +1224,12 @@ class Main():
         
         self._lbl_unattended_mode_no = gdi.RadioButton()
         self._lbl_unattended_mode_no.set_group("unattendedaccess")
-        self._lbl_unattended_mode_no.set_position(_WIDTH_RIGHT/2, appy)
+        if self._rtl:
+            self._lbl_unattended_mode_no.set_position(10, appy)
+        else:
+            self._lbl_unattended_mode_no.set_position(10+wum, appy)
+        self._lbl_unattended_mode_no.set_size(wum,hunm)
+        
         self._lbl_unattended_mode_no.set_text(self._get_message('no'))
         self._lbl_unattended_mode_no.set_enable(False);
         self._lbl_unattended_mode_no.set_action(self.set_unattended_access)
@@ -1172,6 +1238,14 @@ class Main():
         appy+=hbtn+6
         
     def prepare_runonfly_panel(self, capp, bpth, appwmsg):
+        
+        try:
+            isrtl=capp._rtl
+            if isrtl is None:
+                isrtl=False
+        except:
+            isrtl=False
+        
         self._runonfly_base_path = bpth
         try:
             from . import ui
@@ -1200,23 +1274,39 @@ class Main():
         self._lbl_notificationst.set_text_align(gdi.TEXT_ALIGN_CENTERMIDDLE)
         self._lbl_notificationst.set_text(self._get_message('monitorCurrentActivities'))
         self._lbl_notificationst.set_position(ui._GAP_TEXT, lblh)
+        if isrtl:
+            self._lbl_notificationst.set_position(rpw, lblh)
+        else:
+            self._lbl_notificationst.set_position(ui._GAP_TEXT, lblh)        
         self._lbl_notificationst.set_size(w-ui._GAP_TEXT-rpw,25)
         pnl.add_component(self._lbl_notificationst)
+        
+        sthalfy=self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height()
+        sthalfw=int(self._lbl_notificationst.get_width()/2)
+        sthalfh=h-sthalfy
         
         self._lbl_notificationsl = gdi.Label()
         self._lbl_notificationsl.set_background("ffffff")
         self._lbl_notificationsl.set_opaque(True)
-        self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)
-        self._lbl_notificationsl.set_position(self._lbl_notificationst.get_x(), self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height())
-        self._lbl_notificationsl.set_size(int(self._lbl_notificationst.get_width()/2),h-(self._lbl_notificationst.get_y() + self._lbl_notificationst.get_height()))
+        if isrtl:
+            self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
+            self._lbl_notificationsl.set_position(self._lbl_notificationst.get_x()+sthalfw, sthalfy)
+        else:
+            self._lbl_notificationsl.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)
+            self._lbl_notificationsl.set_position(self._lbl_notificationst.get_x(), sthalfy)
+        self._lbl_notificationsl.set_size(sthalfw,sthalfh)
         pnl.add_component(self._lbl_notificationsl)
         
         self._lbl_notificationsr = gdi.Label()
         self._lbl_notificationsr.set_background("ffffff")
         self._lbl_notificationsr.set_opaque(True)
-        self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
-        self._lbl_notificationsr.set_position(self._lbl_notificationst.get_x()+int(self._lbl_notificationst.get_width()/2), self._lbl_notificationsl.get_y())
-        self._lbl_notificationsr.set_size(self._lbl_notificationsl.get_width(),self._lbl_notificationsl.get_height())
+        if isrtl:
+            self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_RIGHTMIDDLE)        
+            self._lbl_notificationsr.set_position(self._lbl_notificationst.get_x(), sthalfy)
+        else:
+            self._lbl_notificationsr.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)        
+            self._lbl_notificationsr.set_position(self._lbl_notificationst.get_x()+sthalfw, sthalfy)
+        self._lbl_notificationsr.set_size(sthalfw,sthalfh)
         pnl.add_component(self._lbl_notificationsr)
         
         self._lbl_notificationsn = gdi.Label()
@@ -1230,12 +1320,16 @@ class Main():
         
         pnlr = gdi.Panel()
         pnlr.set_background("d9d9d9")
-        pnlr.set_position(w-rpw, lblh)
+        if isrtl:
+            pnlr.set_position(0, lblh)
+        else:
+            pnlr.set_position(w-rpw, lblh)
         pnlr.set_size(rpw,h-lblh)
         pnl.add_component(pnlr)
                 
         appy=20
         hunm=40
+        wum = int(ui._BUTTON_WIDTH/2)
         gapunm=80
         self._lbl_unattended_mode = gdi.Label()
         self._lbl_unattended_mode.set_position(ui._BUTTON_GAP, appy+gapunm)
@@ -1247,14 +1341,22 @@ class Main():
         
         self._lbl_unattended_mode_yes = gdi.RadioButton()
         self._lbl_unattended_mode_yes.set_group("unattendedaccess")
-        self._lbl_unattended_mode_yes.set_position(ui._BUTTON_GAP*2, appy)
+        if isrtl:
+            self._lbl_unattended_mode_yes.set_position(ui._BUTTON_GAP+wum, appy)
+        else:
+            self._lbl_unattended_mode_yes.set_position(ui._BUTTON_GAP, appy)
+        self._lbl_unattended_mode_yes.set_size(wum,hunm)
         self._lbl_unattended_mode_yes.set_text(self._get_message('yes'))
         self._lbl_unattended_mode_yes.set_action(self.set_unattended_access)
         pnlr.add_component(self._lbl_unattended_mode_yes)
         
         self._lbl_unattended_mode_no = gdi.RadioButton()
         self._lbl_unattended_mode_no.set_group("unattendedaccess")
-        self._lbl_unattended_mode_no.set_position(rpw/2, appy)
+        if isrtl:
+            self._lbl_unattended_mode_no.set_position(ui._BUTTON_GAP, appy)
+        else:
+            self._lbl_unattended_mode_no.set_position(ui._BUTTON_GAP+wum, appy)
+        self._lbl_unattended_mode_no.set_size(wum,hunm)
         self._lbl_unattended_mode_no.set_text(self._get_message('no'))
         self._lbl_unattended_mode_no.set_action(self.set_unattended_access)
         pnlr.add_component(self._lbl_unattended_mode_no)
@@ -1295,7 +1397,7 @@ class Main():
                 return            
             
             while self.check_update() or self.check_stop():
-                time.sleep(2) #Attende finché il server non cancella l'update file o lo stop file
+                time.sleep(2)
         
             try:
                 if 'monitor_desktop_notification' in self._properties:
@@ -1303,8 +1405,8 @@ class Main():
             except Exception:
                 None
             
-            self.prepare_window()            
-            if mode=="systray":
+            self.prepare_window()
+            if mode=="systray":                
                 self.prepare_systray()
                 try:
                     if utils.is_mac():

@@ -21,7 +21,7 @@ import traceback
 import utils
 
 _WIDTH=780
-_HEIGHT=510
+_HEIGHT=530
 _HEIGHT_BOTTOM=55
 _WIDTH_LEFT=90
 _CONTENT_WIDTH=_WIDTH-_WIDTH_LEFT
@@ -33,7 +33,7 @@ _BUTTON_GAP=10
 
 class VarString:
         
-    def __init__(self, value = None,  password= False):
+    def __init__(self, value=None,  password=False):
         self._value=value
         self._password=password
     
@@ -148,8 +148,7 @@ class Chooser(BaseUI):
         self._message_height=100
         self._accept_key=None
         self._main=None
-        self._selected=None
-        
+        self._selected=None        
         
     def set_message(self, m):
         self._message=m
@@ -196,7 +195,7 @@ class Chooser(BaseUI):
         self._variable=v
     
     def fire_next_step(self):
-        #Verifica se selezionato
+        #Check selecterd
         bok = False
         for i in range(len(self._archooser)):
             inp = self._archooser[i]
@@ -338,6 +337,10 @@ class UI():
         self._title = "DWAgent"
         if "title" in params:
             self._title = utils.str_new(params["title"])
+        try:
+            self._rtl=messages.is_rtl()
+        except:
+            self._rtl=False            
         self._logo = None
         self._topimage = None
         self._topinfo = None
@@ -359,7 +362,6 @@ class UI():
         self._is_raw_input=False
         self._gui_enable=False
         self._prev_msg_wait=""
-        
     
     def set_action(self,f):
         self._action=f
@@ -538,7 +540,7 @@ class UI():
     def _guimode_close(self, e):
         if e["action"]=="PERFORMED":
             if self._cur_step_ui is None or (self._cur_step_ui.is_next_enabled() or self._cur_step_ui.is_back_enabled()) :
-                dlgerr = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_INFO,parentwin=self._app, logopath=self._logo)
+                dlgerr = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_INFO,parentwin=self._app, logopath=self._logo, isrtl=self._rtl)
                 dlgerr.set_title(self._title)
                 dlgerr.set_message(messages.get_message('confirmExit'))
                 dlgerr.set_action(self._guimode_close_action)
@@ -573,14 +575,14 @@ class UI():
     def _guimode_start(self):
         
         gdi.gdw_lib() #Se non è presente la libreria va in errore quindi in modalita console
-                
+        
         self._top_height=0
         if self._topimage is not None:
             self._top_height=gdi.get_image_size(self._topimage)["height"]
         elif self._topinfo is not None:
             self._top_height=(22*len(self._topinfo.split("\n"))) + 10
         
-        self._app = gdi.Window(gdi.WINDOW_TYPE_NORMAL_NOT_RESIZABLE, logopath=self._logo)
+        self._app = gdi.Window(gdi.WINDOW_TYPE_NORMAL_NOT_RESIZABLE, logopath=self._logo, isrtl=self._rtl)
         #self._app = Window(gdi.WINDOW_TYPE_NORMAL_NOT_RESIZABLE, logopath=self._logo)
         #self._app.setUI(self)
         
@@ -590,13 +592,22 @@ class UI():
         self._app.set_action(self._guimode_action)
         
         pnl_left = gdi.Panel();
-        pnl_left.set_position(0, self._top_height)
+        if self._rtl:
+            pnl_left.set_position(_WIDTH-_WIDTH_LEFT, self._top_height)
+        else:
+            pnl_left.set_position(0, self._top_height)
         pnl_left.set_size(_WIDTH_LEFT,_HEIGHT)
         
-        if self._leftcolor is not None:
-            pnl_left.set_background_gradient(self._leftcolor, "FFFFFF", gdi.GRADIENT_DIRECTION_LEFTRIGHT)
+        if self._rtl:
+            if self._leftcolor is not None:
+                pnl_left.set_background_gradient(self._leftcolor, "FFFFFF", gdi.GRADIENT_DIRECTION_RIGHTLEFT)
+            else:
+                pnl_left.set_background_gradient("83e5ff", "FFFFFF", gdi.GRADIENT_DIRECTION_RIGHTLEFT)
         else:
-            pnl_left.set_background_gradient("83e5ff", "FFFFFF", gdi.GRADIENT_DIRECTION_LEFTRIGHT)
+            if self._leftcolor is not None:
+                pnl_left.set_background_gradient(self._leftcolor, "FFFFFF", gdi.GRADIENT_DIRECTION_LEFTRIGHT)
+            else:
+                pnl_left.set_background_gradient("83e5ff", "FFFFFF", gdi.GRADIENT_DIRECTION_LEFTRIGHT)
         self._app.add_component(pnl_left)
         
         if self._topimage is not None:
@@ -631,7 +642,10 @@ class UI():
         hbtn=_BUTTON_HEIGTH
                 
         self._btback = gdi.Button();
-        self._btback.set_position(_BUTTON_GAP, _BUTTON_GAP)
+        if self._rtl:
+            self._btback.set_position(_WIDTH-wbtn-_BUTTON_GAP, _BUTTON_GAP)
+        else:
+            self._btback.set_position(_BUTTON_GAP, _BUTTON_GAP)
         self._btback.set_size(wbtn, hbtn)
         self._btback.set_text(messages.get_message('back'))
         self._btback.set_enable(False);
@@ -639,7 +653,10 @@ class UI():
         pnl_bottom.add_component(self._btback)
                 
         self._btnext = gdi.Button();
-        self._btnext.set_position(_BUTTON_GAP+wbtn+5, _BUTTON_GAP)
+        if self._rtl:
+            self._btnext.set_position(_WIDTH-(2*wbtn)-(2*_BUTTON_GAP), _BUTTON_GAP)
+        else:
+            self._btnext.set_position(_BUTTON_GAP+wbtn+5, _BUTTON_GAP)
         self._btnext.set_size(wbtn, hbtn)
         self._btnext.set_text(messages.get_message('next'))
         self._btnext.set_enable(False);
@@ -647,7 +664,10 @@ class UI():
         pnl_bottom.add_component(self._btnext)
         
         self._btclose = gdi.Button();
-        self._btclose.set_position(_WIDTH-wbtn-_BUTTON_GAP, _BUTTON_GAP)
+        if self._rtl:
+            self._btclose.set_position(_BUTTON_GAP, _BUTTON_GAP)
+        else:
+            self._btclose.set_position(_WIDTH-wbtn-_BUTTON_GAP, _BUTTON_GAP)
         self._btclose.set_size(wbtn, hbtn)
         self._btclose.set_text(messages.get_message('close'))
         self._btclose.set_enable(False);
@@ -665,7 +685,7 @@ class UI():
     
     def _guimode_execute(self, func, callback=None):
         ac = AsyncInvoke(self, func, callback)
-        ac.start()
+        ac.start()        
    
     def _prepare_main_panel(self):
         if self._gui_enable is True:
@@ -679,7 +699,10 @@ class UI():
             else:
                 self._pnlmain = gdi.Panel();
                 self._pnlmain.set_background("ffffff")
-                self._pnlmain.set_position(_WIDTH_LEFT, self._top_height)
+                if self._rtl:
+                    self._pnlmain.set_position(0, self._top_height)
+                else:
+                    self._pnlmain.set_position(_WIDTH_LEFT, self._top_height)
                 self._pnlmain.set_size(_CONTENT_WIDTH,_CONTENT_HEIGHT)
                 self._app.add_component(self._pnlmain)
 
@@ -703,7 +726,7 @@ class UI():
             
     def _show_error(self,  msg):
         if self._gui_enable is True:
-            dlgerr = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,parentwin=self._app, logopath=self._logo)
+            dlgerr = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_ERROR,parentwin=self._app, logopath=self._logo, isrtl=self._rtl)
             dlgerr.set_title(self._title)
             dlgerr.set_message(msg)
             dlgerr.set_action(self._show_error_gui_ok)
@@ -750,11 +773,15 @@ class UI():
             lbl.set_wordwrap(True)
             lbl.set_position(_GAP_TEXT,(_CONTENT_HEIGHT/2)-60)
             lbl.set_size(_CONTENT_WIDTH-(2*_GAP_TEXT),60)
-            lbl.set_text_align(gdi.TEXT_ALIGN_LEFTTOP)
+            lbl.set_text_align(gdi.TEXT_ALIGN_STARTTOP)
             self._pnlmain.add_component(lbl)
+            pbarw=_CONTENT_WIDTH-(4*_GAP_TEXT)
             pbar = gdi.ProgressBar()
-            pbar.set_position(_GAP_TEXT,_CONTENT_HEIGHT/2)
-            pbar.set_size(_CONTENT_WIDTH-(4*_GAP_TEXT),24)
+            if self._rtl:
+                pbar.set_position(_CONTENT_WIDTH - pbarw - _GAP_TEXT,_CONTENT_HEIGHT/2)
+            else:
+                pbar.set_position(_GAP_TEXT,_CONTENT_HEIGHT/2)                
+            pbar.set_size(pbarw,22)
             self._pnlmain.add_component(pbar)
             self._wait_ui={'label':lbl, 'progress':pbar}
         else:
@@ -770,13 +797,13 @@ class UI():
                 pbar.set_y(-100)
                 lbl.set_y(0)
                 lbl.set_height(_CONTENT_HEIGHT)
-                lbl.set_text_align(gdi.TEXT_ALIGN_LEFTMIDDLE)
+                lbl.set_text_align(gdi.TEXT_ALIGN_STARTMIDDLE)
             self._wait_ui['progress_value']=None
         else:
             if 'progress_value' not in self._wait_ui  or self._wait_ui['progress_value'] is None or self._wait_ui['progress_value']!=progr:
                 lbl.set_y((_CONTENT_HEIGHT/2)-40)
                 lbl.set_height(30)
-                lbl.set_text_align(gdi.TEXT_ALIGN_LEFTTOP)
+                lbl.set_text_align(gdi.TEXT_ALIGN_STARTTOP)
                 pbar.set_y(_CONTENT_HEIGHT/2)
                 pbar.set_percent(progr)                
             self._wait_ui['progress_value']=progr
@@ -822,7 +849,7 @@ class UI():
             l.set_position(_GAP_TEXT,_GAP_TEXT)
             l.set_size(w,h)
             l.set_wordwrap(True)
-            l.set_text_align(gdi.TEXT_ALIGN_LEFTTOP)
+            l.set_text_align(gdi.TEXT_ALIGN_STARTTOP)
             l.set_text(inps.get_message())
             self._pnlmain.add_component(l)
 
@@ -833,16 +860,23 @@ class UI():
                 inp=ar[i]
                 #LABEL
                 l = gdi.Label()
-                l.set_position(_GAP_TEXT,p)
+                if self._rtl:
+                    l.set_position(_CONTENT_WIDTH-_GAP_TEXT-lblw,p)
+                else:
+                    l.set_position(_GAP_TEXT,p)
                 l.set_size(lblw-1,30)
                 l.set_text(inp['label'])
                 self._pnlmain.add_component(l)
                 
                 #TEXTBOX
+                tw=_CONTENT_WIDTH-(4*_GAP_TEXT)-lblw
                 t = gdi.TextBox()
                 t.set_name(inp['key'])
-                t.set_position(_GAP_TEXT+lblw,p)
-                t.set_size(_CONTENT_WIDTH-(4*_GAP_TEXT)-lblw,30)
+                if self._rtl:
+                    t.set_position(_CONTENT_WIDTH-tw-(_GAP_TEXT+lblw),p)
+                else:
+                    t.set_position(_GAP_TEXT+lblw,p)
+                t.set_size(tw,30)
                 t.set_text(inp['variable'].get())
                 if inp['variable'].is_password():
                     t.set_password_mask(True)
@@ -878,7 +912,7 @@ class UI():
             w=_CONTENT_WIDTH-(2*_GAP_TEXT)
             l = gdi.Label() 
             l.set_wordwrap(True)
-            l.set_text_align(gdi.TEXT_ALIGN_LEFTTOP)
+            l.set_text_align(gdi.TEXT_ALIGN_STARTTOP)
             l.set_text(chs.get_message())
             
             if len(chs.get_message_hyperlinks())>0:

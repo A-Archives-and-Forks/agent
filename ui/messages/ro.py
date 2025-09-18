@@ -78,7 +78,7 @@ data={
     'error':u'Eroare',
     'errorAgentAlreadyExsists':u'Agentul {0} există deja.',
     'errorAgentMax':u'S-a depășit numărul maxim de agenți posibili.',
-    'errorAgentNameNotValid':u'Nume invalid. Nu se pot utiliza caracterele / \ | # @ : .',
+    'errorAgentNameNotValid':u'Nume invalid. Nu se pot utiliza caracterele / \\ | # @ : .',
     'errorConnectionConfig':u'Eroare de conexiune. Verificați starea procesului DWAgent.',
     'errorConnectionQuestion':u'Eroare de conexiune. Verificați conexiunea la internet sau firewall. \nDoriți sa configurați un proxy?',
     'errorInvalidCode':u'Codul este invalid.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Instalare serviciu esuata',
     'installShortcuts':u'Instalare comenzi rapide...',
     'installShortcutsErr':u'Instalare comenzi rapide esuata.',
+    'installerNotSupported':u'Acest kit de instalare nu mai este valabil. Te rog descarca ultima versiune.',
     'ipAddress':u'Adresa IP: {0}',
     'linuxRootPrivileges':u'Trebuie sa ai privilegii de root pentru a instala DWAgent.\nTe rog porneste scriptul folosind un utilizator root.',
     'menuConfigure':u'Configurare',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Continuind cu instalarea sau folosirea acestui program insemneaza ca sunteti de acord cu #TERMSANDCONDITIONS si cu #PRIVACYPOLICY',
     'welcomeSecurity':u'Securitate\nPentru a va proteja intimitatea, noi nu stocam informatii din agent pe serverele noastre. Comunicarile de date intre utilizatori, serverul nostru si agenti sunt criptate in asa fel incat terte parti nu au access la acestea.',
     'welcomeSoftwareUpdates':u'Actualizari program\nAcest program se actualizeaza in mod automat',
+    'welcomeTermsAndConditions':u'Prin selectarea optiunii \'{0}\' sau \'{1}\' accept #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Trebuie sa aveti drepturi de administrator pentru a instala DWAgent.\nVa rog porniti executabilul cu \'ruleaza ca adminstrator\'.',
     'yes':u'Da'
 }

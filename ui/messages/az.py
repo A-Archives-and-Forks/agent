@@ -78,7 +78,7 @@ data={
     'error':u'Xəta',
     'errorAgentAlreadyExsists':u'Agent {0} artıq mövcuddur.',
     'errorAgentMax':u'Maksimum agent sayını keçdi.',
-    'errorAgentNameNotValid':u'Agent adı etibarlı deyil. / \ | Simvollarından istifadə edə bilməzsiniz # @:.',
+    'errorAgentNameNotValid':u'Agent adı etibarlı deyil. / \\ | Simvollarından istifadə edə bilməzsiniz # @:.',
     'errorConnectionConfig':u'Əlaqə xətası. Xahiş edirəm DWAgent xidmətinin işlədiyini yoxlayın.',
     'errorConnectionQuestion':u'Əlaqə xətası. Zəhmət olmasa internet bağlantınızı və ya təhlükəsizlik divarınızı yoxlayın.\nBir proxy konfiqurasiya etmək istəyirsiniz?',
     'errorInvalidCode':u'Girilən kod etibarsızdır.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Xidmət quraşdırılması uğursuz oldu.',
     'installShortcuts':u'Qısayollar quraşdırılır ...',
     'installShortcutsErr':u'Qısayol quraşdırıla bilmədi.',
+    'installerNotSupported':u'Bu quraşdırıcı artıq dəstəklənmir. Zəhmət olmasa son versiyanı endirin.',
     'ipAddress':u'IP ünvanı: {0}',
     'linuxRootPrivileges':u'DWAgent qurmaq üçün kök imtiyazlarınız olmalıdır.\nZəhmət olmasa skripti sudo ilə və ya kök olaraq çalıştırın.',
     'menuConfigure':u'Konfiqurasiya edin',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Bu proqramı quraşdırmağa və ya işə salmaqla #TERMSANDCONDITIONS və #PRIVACYPOLICY qəbul edirsiniz',
     'welcomeSecurity':u'Təhlükəsizlik\nMəxfiliyinizi qorumaq üçün agentdəki məlumatları serverlərimizdə saxlamırıq. İstifadəçilər, serverlərimiz və agentlərimiz arasında rabitə şifrələnir ki, üçüncü tərəflər onlara daxil ola bilməsin.',
     'welcomeSoftwareUpdates':u'Proqram yeniləmələri\nBu proqram avtomatik olaraq yenilənir',
+    'welcomeTermsAndConditions':u'\'{0}\' və ya \'{1}\' seçimini seçməklə #TERMSANDCONDITIONS qəbul edirəm',
     'windowsAdminPrivileges':u'DWAgent qurmaq üçün inzibati imtiyazlarınız olmalıdır.\nZəhmət olmasa yürütülə bilən düyməni vurun və quraşdırıcıyı başlamaq üçün \'idarəçi olaraq çalıştır\' düyməsini basın.',
     'yes':u'Bəli'
 }

@@ -9,6 +9,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import gdi
 import images
 _NOTIFY_ICON={"visible":False, "obj":None}
+_TEST_OBJ={"mainwnd":None}
 
 def _test_notify(e):
     if e["action"]==u"MOUSECLICK":
@@ -38,23 +39,29 @@ def _test_notify_action(e):
 
 def _test_popup_menu(e):
     if e["action"]==u"MOUSECLICK":
-        prnt=None
-        if "window" in e:
-            prnt=e["window"]
-        wwn = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_WARN,prnt) 
+        wwn = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_WARN,_TEST_OBJ["mainwnd"]) 
         wwn.set_title("Title MsgBox")
         wwn.set_message(u"NAME:" + str(e["name"]))
         wwn.show()
 
+def _test_other_window_action(e):
+        if e["action"]=="DIALOG_YES":
+            wwn = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_OK,gdi.DIALOGMESSAGE_LEVEL_INFO,_TEST_OBJ["mainwnd"]) 
+            wwn.set_title("Title MsgBox Action")
+            wwn.set_message(u"YES")
+            wwn.show()
+            
+            
+
 def _test_other_window(e):
     if e["action"]==u"MOUSECLICK":
-        prnt=None
-        if "window" in e:
-            prnt=e["window"]
-        wwn = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_WARN,prnt) 
+        wwn = gdi.DialogMessage(gdi.DIALOGMESSAGE_ACTIONS_YESNO,gdi.DIALOGMESSAGE_LEVEL_WARN,_TEST_OBJ["mainwnd"]) 
         wwn.set_title("Title MsgBox")
         wwn.set_message(u"Test Message.\nThis is a test message. How are you?. " + str(e["action"]))
+        wwn.set_action(_test_other_window_action)
         wwn.show()
+        
+        
 
 def _test_close_window(e):
     if e["action"]==u"MOUSECLICK":
@@ -67,6 +74,18 @@ def _test_close_window(e):
             wnd=e["window"]
             wnd.destroy()
         
+def _test_menu2_action(e):
+    if e["action"]==u"PERFORMED":
+        if e["name"]=="hide":
+            print("HIDE")            
+
+def _test_popup_menu2(e):
+    if e["action"]==u"MOUSECLICK":
+        pp=gdi.PopupMenu()
+        pp.add_item("hide","hide")
+        pp.add_item("none","none")
+        pp.set_action(_test_menu2_action);
+        pp.show()
 
 def _test_window_action(e):
     wnd=e["window"]
@@ -77,7 +96,8 @@ def _test_window_action(e):
             
         
 if __name__ == "__main__":
-    ww = gdi.Window()
+    ww = gdi.Window(isrtl=False)
+    _TEST_OBJ["mainwnd"]=ww
     ww.set_title(u"Title test")
     ww.set_action(_test_window_action);
     #ww.set_position(100, 100)
@@ -166,6 +186,12 @@ if __name__ == "__main__":
     b3.set_position(10+b1.get_width()+10+b2.get_width()+10, 10)
     b3.set_action(_test_notify)
     pb.add_component(b3)
+    
+    b4 = gdi.Button();
+    b4.set_text("Popupmenu")
+    b4.set_position(10+b1.get_width()+10+b2.get_width()+10+b3.get_width()+10, 10)
+    b4.set_action(_test_popup_menu2)
+    pb.add_component(b4)
 
     ww.show()
     gdi.loop()

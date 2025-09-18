@@ -78,7 +78,7 @@ data={
     'error':u'Chyba',
     'errorAgentAlreadyExsists':u'Agent {0} už existuje.',
     'errorAgentMax':u'Maximálny počet agentov je prekročený.',
-    'errorAgentNameNotValid':u'Názov agenta nie je platný. Nemôžete použiť znaky / \ | # @:.',
+    'errorAgentNameNotValid':u'Názov agenta nie je platný. Nemôžete použiť znaky / \\ | # @:.',
     'errorConnectionConfig':u'Chyba spojenia. Skontrolujte, či je služba DWAgent spustená.',
     'errorConnectionQuestion':u'Chyba spojenia. Skontrolujte pripojenie k internetu alebo konfiguráciu brány firewall.\nChcete konfigurovať proxy?',
     'errorInvalidCode':u'Chybný vložený kód.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Inštalácia služby bola neúspešná.',
     'installShortcuts':u'Inštalácia odkazu ...',
     'installShortcutsErr':u'Inštalácia odkazu bola neúspešná',
+    'installerNotSupported':u'Tento inštalačný súbor už nie je podporovaný. Prosím stiahnite si najnovšiu verziu.',
     'ipAddress':u'IP adresa: {0}',
     'linuxRootPrivileges':u'Na inštaláciu DWAgent musíte mať oprávnenia správcu (root.)\nSpustite skript pomocou používateľa správcu (root.)',
     'menuConfigure':u'Konfigurácia',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'S pokračovaním inštalácie alebo používaním toho softvéru súhlasíte s #TERMSANDCONDITIONS a s #PRIVACYPOLICY',
     'welcomeSecurity':u'Zabezpečenie\nAby sme chránili vaše súkromie, zaručujeme, že na našich serveroch nebudú uložené žiadne informácie a komunikácia je šifrovaná, takže tretie strany ich nemôžu čítať.',
     'welcomeSoftwareUpdates':u'Aktualizácie softvéru\nAktualizácie tohto softvéru sú automatické.',
+    'welcomeTermsAndConditions':u'Výberom možnosti \'{0}\' alebo \'{1}\' súhlasím s #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Na inštaláciu DWAgent musíte mať oprávnenia správcu.\nSpustite spustiteľný súbor "Spustiť ako správca".',
     'yes':u'Áno'
 }

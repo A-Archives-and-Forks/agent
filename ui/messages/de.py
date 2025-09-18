@@ -78,7 +78,7 @@ data={
     'error':u'Fehler',
     'errorAgentAlreadyExsists':u'Der Agent {0} existiert bereits.',
     'errorAgentMax':u'Maximale Anzahl an Agenten überschritten.',
-    'errorAgentNameNotValid':u'Der Agentenname ist ungültig. Die Zeichen / \ | # @ : . können nicht verwendet werden.',
+    'errorAgentNameNotValid':u'Der Agentenname ist ungültig. Die Zeichen / \\ | # @ : . können nicht verwendet werden.',
     'errorConnectionConfig':u'Verbindungsfehler. Bitte prüfen, ob der DWAgent-Dienst läuft.',
     'errorConnectionQuestion':u'Verbindungsfehler. Bitte Internetverbindung oder Firewalleinstellungen prüfen.\nWollen Sie den Proxy konfigurieren?',
     'errorInvalidCode':u'Der eingegebene Code ist ungültig.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Installation des Dienstes fehlgeschlagen.',
     'installShortcuts':u'Installiere Verknüpfungen...',
     'installShortcutsErr':u'Installation der Verknüpfungen fehlgeschlagen.',
+    'installerNotSupported':u'Dieses Installationsprogramm wird nicht mehr unterstützt. Bitte laden Sie die neueste Version herunter.',
     'ipAddress':u'IP-Adresse: {0}',
     'linuxRootPrivileges':u'Für die Installation des DWAgent sind root-Rechte erforderlich.\nSkript bitte als root-Benutzer starten.',
     'menuConfigure':u'Konfigurieren',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'Indem Sie mit der Installation fortfahren oder diese Software ausführen, erklären Sie sich mit den #TERMSANDCONDITIONS und der #PRIVACYPOLICY einverstanden',
     'welcomeSecurity':u'Sicherheit:\nUm den Datenschutz zu gewährleisten, garantieren wir, dass keine Informationen auf unseren Servern gespeichert werden und die Kommunikation verschlüsselt ist, sodass Dritte keinen Zugriff darauf haben.',
     'welcomeSoftwareUpdates':u'Software-Aktualisierungen:\nDiese Software wird automatisch aktualisiert',
+    'welcomeTermsAndConditions':u'Durch Auswählen der Option \'{0}\' oder \'{1}\' akzeptiere ich die #TERMSANDCONDITIONS',
     'windowsAdminPrivileges':u'Zur Installation von DWAgent sind Administratorenrechte erforderlich.\nBitte die Installation "Als Administrator ausführen".',
     'yes':u'Ja'
 }

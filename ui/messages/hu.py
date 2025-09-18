@@ -78,7 +78,7 @@ data={
     'error':u'Hiba',
     'errorAgentAlreadyExsists':u'Az ügynök már létezik: \'{0}\'.',
     'errorAgentMax':u'Túllépte az ügynökök maximális számát.',
-    'errorAgentNameNotValid':u'Az ügynök neve érvénytelen. Nem használhatja a következő karaktereket: / \ | # @ : .',
+    'errorAgentNameNotValid':u'Az ügynök neve érvénytelen. Nem használhatja a következő karaktereket: / \\ | # @ : .',
     'errorConnectionConfig':u'Csatlakozási hiba. Kérjük, ellenőrizze, hogy fut-e a DWAgent szolgáltatás.',
     'errorConnectionQuestion':u'Csatlakozási hiba. Kérjük, ellenőrizze internetkapcsolatát vagy tűzfalát.\nSzeretne proxy-t beállítani?',
     'errorInvalidCode':u'A megadott kód érvénytelen.',
@@ -91,6 +91,7 @@ data={
     'installServiceErr':u'Szolgáltatás telepítése sikertelen.',
     'installShortcuts':u'Parancsikonok telepítése...',
     'installShortcutsErr':u'A parancsikon telepítése sikertelen.',
+    'installerNotSupported':u'Ez a telepítő már nem támogatott. Kérjük, töltse le a legújabb verziót.',
     'ipAddress':u'IP-cím: {0}',
     'linuxRootPrivileges':u'A DWÜgynök telepítéséhez root jogosultságokkal kell rendelkeznie.\nKérjük, futtassa a szkriptet sudo-val vagy root-ként.',
     'menuConfigure':u'Konfigurálás',
@@ -201,6 +202,7 @@ data={
     'welcomePrivacyTerms':u'A telepítés folytatásával vagy a szoftver futtatásával Ön elfogadja a következőket: #TERMSANDCONDITIONS és #PRIVACYPOLICY',
     'welcomeSecurity':u'Biztonság\nAz Ön adatainak védelme érdekében az ügynöktől származó információkat nem tároljuk a szervereinken. A felhasználók, szervereink és az ügynökök közötti kommunikáció titkosított, így harmadik felek nem férhetnek hozzá.',
     'welcomeSoftwareUpdates':u'Szoftverfrissítések\nEz a szoftver automatikusan frissül',
+    'welcomeTermsAndConditions':u'A \'{0}\' vagy a \'{1}\' lehetőség kiválasztásával elfogadom a #TERMSANDCONDITIONS-et.',
     'windowsAdminPrivileges':u'A DWÜgynök telepítéséhez rendszergazdai jogosultságokkal kell rendelkeznie.\nKérjük, a telepítő indításához kattintson a jobb gombbal a végrehajtható fájlra, és kattintson a "Futtatás rendszergazdaként" parancsra.',
     'yes':u'Igen'
 }
