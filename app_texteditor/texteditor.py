@@ -55,7 +55,7 @@ class TextEditor():
         return json.dumps(ret)
         
     def req_save(self, cinfo ,params):
-        path = self.check_and_replace_path(cinfo, agent.get_prop(params,'path',None),  self._get_app_filesystem().OPERATION_EDIT, {"check_exists": False})
+        path = self.check_and_replace_path(cinfo, agent.get_prop(params,'path',None),  self._get_app_filesystem().OPERATION_EDIT, {"check_exists": False, "default_allow_edit": True})
         self._write(path,  params)
         return None
 

@@ -85,6 +85,10 @@ class FileSystem():
             pret={"name":appnm,"fullAccess": True}
         else:
             pret=self._agent_main.get_app_permission(cinfo,appnm)
+            if appnm!="filesystem" and pret is not None and pret["fullAccess"]:
+                appret=self._agent_main.get_app_permission(cinfo,"filesystem")
+                if appret is not None:
+                    pret=appret
         return pret;
     
     def get_permission_path(self, cinfo, path, options={}):
@@ -92,8 +96,8 @@ class FileSystem():
         if "app" in options:
             appnm = options["app"]
         
-        #NEL CASO DI #FILESYSTEM:// POTREBBE CORRISPONDERE A PIU' PATH ES. /a/b/c puo' corrispondere agli alias dei path /a/ e a /b/
-        #quindi provo tutti i path
+        #IF #FILESYSTEM:// CAN MATCHES SEVERAL PATHS. e.g. /a/b/c can be path alias like /a/ e a /b/
+        #SO I CHECK ALL PATHS
         pathstocheck=[]
         apppath=path
         if apppath.startswith("#FILESYSTEM://"):
@@ -117,7 +121,7 @@ class FileSystem():
                                 apppath= pt + apppath
                                 bcheck=True
                                 break
-                    #SOSTITUISCE L'alias
+                    #Replace the alias
                     if bcheck:
                         prms=self.get_permission(cinfo,appnm)
                         if prms is not None:
@@ -136,7 +140,7 @@ class FileSystem():
             pathstocheck.append(path)
 
         pathsret=[]
-        #Verifica permessi
+        #Check permissions
         prms=self.get_permission(cinfo,appnm)
         if prms is not None:
             for apppath in pathstocheck:
@@ -152,10 +156,10 @@ class FileSystem():
                             pt = permpt["_path"]
                             if pt.endswith(utils.path_sep):
                                 pt=pt[:len(pt)-1]
-                            apppath = apppath[len(name):];
+                            apppath = apppath[len(name):]
                             apppath= pt + apppath
                             itmpth["name"]=apppath
-                            #Verifica i permessi
+                            #Check permissions
                             itmpth["allow_edit"]=False
                             if "edit" in permpt:
                                 itmpth["allow_edit"]=permpt["edit"]
@@ -202,6 +206,8 @@ class FileSystem():
                 break             
             
         if sret is None:
+            if path.startswith("#FILESYSTEM://"):
+                path=path[14:]
             raise Exception("Permission denied.\nOperation: " + operation + "\nPath: " + path);
         #Verifica se esiste il path
         check_exists=True
@@ -242,7 +248,7 @@ class FileSystem():
             itm["Group"] = finfo["Group"]
         arret.append(itm)
             
-    def req_list(self, cinfo ,params):
+    def req_list(self, cinfo, params):
         path = agent.get_prop(params,'path',None)
         
         
@@ -270,7 +276,7 @@ class FileSystem():
             if app_name is None:
                 prms=self.get_permission(cinfo);
             else:
-                prms=self.get_permission(cinfo,app_name);
+                prms=self.get_permission(cinfo,app_name);                
             if prms["fullAccess"]:
                 ar = self._osnative.get_resource_path()
                 for i in range(len(ar)):
@@ -285,7 +291,7 @@ class FileSystem():
                     arret.append({'Name': 'D:' + permpt["name"]})
                     
         else:
-            lst=None            
+            lst=None
             options={}
             if app_name is not None:
                 options["app"]=app_name
@@ -296,7 +302,7 @@ class FileSystem():
                 lst=utils.path_list(pdir)
             except Exception:
                 raise Exception("Permission denied or read error.");
-            #Carica la lista
+            #load list
             for fname in lst:
                 #DA GESTIRE COSI EVITA GLI ERRORI MA PER FILENAME NON UTF8 NON RECUPERA ALTRE INFO TIPO LA DIMENSIONE E DATAMODIFICA
                 if sys.version_info[0]==2:
@@ -324,20 +330,20 @@ class FileSystem():
                         self._append_to_list(arret, pdir, fname)
                         # if (image_info==True): DA GESTIRE Width e Height  se file di tipo Immagini
 
-        #ORDINA PER NOME
+        #SORT BY NAME
         arret = sorted(arret, key=lambda k: k['Name'].lower())
-         
+        
         jsret = {'items' : arret, 'permissions': {"apps":{}}}
-        if path!="$" and app_name is None:
-            a = jsret["permissions"]["apps"]
-            paths = self.get_permission_path(cinfo, u"#FILESYSTEM://" + path, {"app":"texteditor" ,"check_exists": False})
-            if len(paths)>0:
-                a["texteditor"]={}
-            paths = self.get_permission_path(cinfo, u"#FILESYSTEM://" + path, {"app":"logwatch" ,"check_exists": False})
-            if len(paths)>0:
-                a["logwatch"]={}
+        if app_name is None:            
+            if path!="$" and app_name is None:
+                a = jsret["permissions"]["apps"]
+                paths = self.get_permission_path(cinfo, u"#FILESYSTEM://" + path, {"app":"texteditor" ,"check_exists": False})
+                if len(paths)>0:
+                    a["texteditor"]={}
+                paths = self.get_permission_path(cinfo, u"#FILESYSTEM://" + path, {"app":"logwatch" ,"check_exists": False})
+                if len(paths)>0:
+                    a["logwatch"]={}
             
-            None
          
         return json.dumps(jsret)
   
