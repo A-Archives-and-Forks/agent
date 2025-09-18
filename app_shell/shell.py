@@ -19,14 +19,19 @@ import agent
 import json
 import native
 
+
 try:
     from .os_win_pyconpty import conpty
 except Exception as ex:
     None
 
-try:    
+try:
     import pwd
     import crypt
+except:
+    None
+
+try:
     import termios
     import pty
     import fcntl
@@ -34,7 +39,9 @@ try:
 except:
     None
 
-SHELL_INTERVALL_TIMEOUT = 45; #Seconds
+SHELL_TIMEOUT_CONNECTION = 40; #Seconds
+SHELL_TIMEOUT_RECOVERY = 20; #Seconds
+SHELL_VERSION = 1
 
 class Shell():
     
@@ -67,8 +74,8 @@ class Shell():
                 try:
                     sm.terminate()
                 except Exception as e:
-                    self._agent_main.write_except(e,"AppShell:: on_conn_close error:")
-            
+                    self._agent_main.write_except(e,"AppShell:: on_conn_close terminate error:")
+        
     
     def has_permission(self,cinfo):
         return self._agent_main.has_app_permission(cinfo,"shell"); 
@@ -76,13 +83,20 @@ class Shell():
     def _add_shell_manager(self, cinfo, wsock):
         itm = None
         self._list_semaphore.acquire()
-        key = None
+        sid = None
         try:
+            #CHECK FOR RECOVERY SESSION
+            for k in self._list.keys():
+                sm = self._list[k]
+                if sm._cinfo==cinfo and sm.recovery(wsock):
+                    return sm
+                    
+            #CREATE NEW
             while True:
-                key = agent.generate_key(10) 
-                if key not in self._list:
-                    itm = ShellManager(self, cinfo, key, wsock)
-                    self._list[key]=itm
+                sid = agent.generate_key(10) 
+                if sid not in self._list:
+                    itm = ShellManager(self, cinfo, sid, wsock)
+                    self._list[sid]=itm
                     break
         finally:
             self._list_semaphore.release()
@@ -104,24 +118,26 @@ class Shell():
 
 class ShellManager(threading.Thread):
     
-    REQ_TYPE_INITIALIZE=0
-    REQ_TYPE_TERMINATE=1
-    REQ_TYPE_INPUTS=2
-    REQ_TYPE_CHANGE_ROWS_COLS=3
-    
     def __init__(self, shlmain, cinfo, sid,  wsock):
         threading.Thread.__init__(self,  name="ShellManager")
         self._shlmain=shlmain
-        self._cinfo=cinfo
-        self._prop=wsock.get_properties()
+        self._cinfo=cinfo        
         self._idses = cinfo.get_idsession()
         self._id=sid        
-        self._bclose=False
-        self._websocket=wsock
+        self._bclose=False        
         self._semaphore = threading.Condition()
         self._shell_list = {}
+        self._timeout_counter=utils.Counter()
+        self._recovery_supported = False
+        self._recovery = False
+        self._send_info = False        
+        self._accept_websocket(wsock)
+    
+    def _accept_websocket(self,wsock):
+        self._prop=wsock.get_properties()                
+        self._websocket=wsock
         self._websocket.accept(10,{"on_close": self._on_close,"on_data":self._on_data})
-                
+    
     def _decode_data(self,data):        
         return utils.bytes_to_str(data,"utf8")
         
@@ -130,7 +146,6 @@ class ShellManager(threading.Thread):
     
     def get_idses(self):
         return self._idses
-    
     
     def _is_user_match(self, word, n, pattern, m):
         if m == len(pattern):
@@ -172,15 +187,14 @@ class ShellManager(threading.Thread):
         try:
             if not self._bclose:
                 try:
-                    self._timeout_cnt=0;
-                    self._last_timeout=int(time.time() * 1000)
+                    self._timeout_counter.reset()
                     
                     if tpdata == ord('s'):
                         prprequest = json.loads(data)
                     else:  #OLD TO REMOVE 19/12/2022
                         prprequest = json.loads(self._decode_data(data))
                     
-                    if prprequest["type"]==ShellManager.REQ_TYPE_INITIALIZE:
+                    if prprequest["type"]=="open" or prprequest["type"]==0: #28 04 23 NUMBERIC IS FOR COMPATIBILITY
                         sid=prprequest["id"]
                         if agent.is_windows():
                             shl = Windows(self, sid, prprequest["cols"], prprequest["rows"])
@@ -189,21 +203,21 @@ class ShellManager(threading.Thread):
                         shl.initialize()
                         self._shell_list[sid]=shl
                         self._semaphore.notifyAll()
-                    elif prprequest["type"]==ShellManager.REQ_TYPE_TERMINATE:
+                    elif prprequest["type"]=="close" or prprequest["type"]==1: #28 04 23 NUMBERIC IS FOR COMPATIBILITY
                         sid=prprequest["id"]
                         if sid in self._shell_list:
                             shl=self._shell_list[sid]
                             shl.terminate()
                             del self._shell_list[sid]
                             self._semaphore.notifyAll()
-                    elif prprequest["type"]==ShellManager.REQ_TYPE_INPUTS:
+                    elif prprequest["type"]=="inputs" or prprequest["type"]==2: #28 04 23 NUMBERIC IS FOR COMPATIBILITY
                         sid=prprequest["id"]
                         if sid in self._shell_list:
                             shl=self._shell_list[sid]
                             sdata=prprequest["data"]
                             shl.write_inputs(sdata)
                             self._semaphore.notifyAll()
-                    elif prprequest["type"]==ShellManager.REQ_TYPE_CHANGE_ROWS_COLS:
+                    elif prprequest["type"]=="change_rows_cols" or prprequest["type"]==3: #28 04 23 NUMBERIC IS FOR COMPATIBILITY
                         sid=prprequest["id"]
                         if sid in self._shell_list:
                             shl=self._shell_list[sid]
@@ -211,43 +225,54 @@ class ShellManager(threading.Thread):
                             cols=prprequest["cols"]
                             shl.change_rows_cols(rows,cols)
                             self._semaphore.notifyAll()
-                    elif prprequest["type"]=="alive":
+                    elif prprequest["type"]=="init":
+                        self._recovery_supported=True
+                        self._send_info=True
+                    elif prprequest["type"]=="term":
+                        self._bclose=True
+                    elif prprequest["type"]=="keepalive":
                         None
                 except Exception as ex:
                     self._bclose=True
                     self._shlmain._agent_main.write_except(ex,"AppShell:: shell manager " + self._id + ":")
         finally:
             self._semaphore.release()
-        
-    
+            
     def run(self):
-        self._timeout_cnt=0;
-        self._last_timeout=int(time.time() * 1000)
         try:            
             self._semaphore.acquire()
             try:
+                self._timeout_counter.reset()
                 bwait=False
                 while not self._bclose:
                     if bwait:
                         self._semaphore.wait(0.2)
                     bwait=True
-                    elapsed=int(time.time() * 1000)-self._last_timeout
-                    if elapsed<0:
-                        self._last_timeout=int(time.time() * 1000)
-                    elif elapsed>1000:
-                        self._timeout_cnt+=1;
-                        self._last_timeout=int(time.time() * 1000)
-                    if self._timeout_cnt>=SHELL_INTERVALL_TIMEOUT:
-                        self.terminate()
-                    else:                        
+                    tm=SHELL_TIMEOUT_CONNECTION
+                    if self._recovery:
+                        tm=SHELL_TIMEOUT_RECOVERY
+                    if self._timeout_counter.is_elapsed(tm):
+                        self._bclose=True
+                    elif not self._recovery:
+                        if self._send_info:
+                            self._send_info=False
+                            snd = {}
+                            snd["type"]="info"
+                            snd["version"]=SHELL_VERSION
+                            snd["ids"]=[]
+                            for idx in self._shell_list:
+                                snd["ids"].append(idx)
+                            appsend = json.dumps(snd)
+                            self._websocket.send_string(appsend)                        
                         arrem=[]
                         for idx in self._shell_list:
-                            try:                                
+                            try:
                                 #apptm=int(time.time() * 1000)                                
                                 upd=self._shell_list[idx].read_update()
                                 if upd is not None and len(upd)>0:
                                     bwait=False
                                     snd = {}
+                                    snd["type"]="data"
                                     snd["id"]=idx
                                     snd["data"]=upd
                                     appsend = json.dumps(snd)
@@ -258,11 +283,12 @@ class ShellManager(threading.Thread):
                                     print("*****************************************************************************\n")
                                     print("SEND: len:" + str(len(appsend)) + "  time:" + str(int(time.time() * 1000)-apptm) + "\n")'''
                                 if self._shell_list[idx].is_terminate():
-                                    raise Exception("Process terminated.") 
+                                    raise Exception("Process terminated.")
                             except Exception:
                                 er=utils.get_exception()
                                 try:
                                     snd = {}
+                                    snd["type"]="data"
                                     snd["id"]=idx
                                     snd["data"]="\r\n" + str(er)
                                     appsend = json.dumps(snd)
@@ -282,11 +308,34 @@ class ShellManager(threading.Thread):
         except Exception as e:
             self.terminate()
             self._shlmain._agent_main.write_except(e,"AppShell:: shell manager error " + self._id + ":")        
-        self._destroy();
+        self._destroy()
     
     def _on_close(self):
-        self.terminate();
+        if self._recovery_supported:
+            #WAIT RECOVERY
+            self._semaphore.acquire()
+            try:
+                if not self._bclose:
+                    self._timeout_counter.reset()
+                    self._recovery=True        
+            finally:
+                self._semaphore.release()
+        else:            
+            self.terminate()        
     
+    def recovery(self,wsock):
+        bret=False
+        self._semaphore.acquire()
+        try:
+            if not self._bclose and self._recovery:
+                self._accept_websocket(wsock)                
+                self._timeout_counter.reset()
+                self._recovery=False
+                bret=True
+        finally:
+            self._semaphore.release()
+        return bret
+
     def terminate(self):
         self._semaphore.acquire()
         try:
@@ -358,11 +407,53 @@ class LoginRequest():
         else:
             self._soutput+=c
     
+    def _write_inputs_char_size(self, s):
+        p=0
+        for c in s:
+            p+=1
+            if self._key=="user" and ord(c)>=11904:
+                p+=1
+        return p
+    
     def write_inputs(self,c):
-        if self._key=="loginIncorrect" or self._key=="waitAndClear" or self._key=="openSession" or self._key=="complete":
+        if ord(c[0])==27:
+            if self._key=="user":
+                sep=c[1:]
+                if sep=="[D": #LEFT
+                    if self._pos>0:
+                        psz = self._write_inputs_char_size(self._val[self._pos-1:self._pos])
+                        self._append_to_output("\x1b[" + str(psz) + "D")
+                        self._pos-=1
+                elif sep=="[C": #RIGHT
+                    if self._pos<len(self._val):
+                        psz = self._write_inputs_char_size(self._val[self._pos:self._pos+1])
+                        self._append_to_output("\x1b[" + str(psz) + "C")                        
+                        self._pos+=1
+                elif sep=="[H": #START
+                    if self._pos>0:
+                        psz = self._write_inputs_char_size(self._val[:self._pos])
+                        self._append_to_output("\x1b[" + str(psz) + "D")
+                        self._pos=0
+                elif sep=="[F": #END
+                    if self._pos<len(self._val):
+                        psz = self._write_inputs_char_size(self._val[self._pos:])
+                        self._append_to_output("\x1b[" + str(psz) + "C")
+                        self._pos=len(self._val)
+                elif sep=="[3~": #CANC
+                    if self._pos<len(self._val):
+                        lpart=self._val[0:self._pos]
+                        rpart=self._val[self._pos+1:]
+                        self._val=lpart+rpart
+                        self._append_to_output("\x1b[K"+rpart)
+                        rl = self._write_inputs_char_size(rpart)
+                        if rl>0:
+                            self._append_to_output("\x1b[" + str(rl) + "D")
             return
-        if len(c)==1:
-            if ord(c)==13:
+            
+        for sc in c:
+            if ord(sc)==27:
+                return
+            elif ord(sc)==13: #ENTER
                 if self._key=="user" and len(self._val)>0:
                     self._user=self._val
                     self._key="password"
@@ -378,57 +469,30 @@ class LoginRequest():
                         self._key="loginIncorrect"
                         self._soutput="\r\n"
                         self._wait_counter=utils.Counter()
-            elif ord(c)>=32:
-                if ord(c)==127:
-                    if self._pos>0 and len(self._val)>0:
-                        lpart=self._val[0:self._pos-1]
-                        rpart=self._val[self._pos:]
-                        self._val=lpart+rpart  
-                        self._pos-=1
-                        self._append_to_output("\x1b[1D\x1b[K"+rpart)
-                        rl = len(rpart)
-                        if rl>0:
-                            self._append_to_output("\x1b[" + str(rl) + "D")
-                else:
-                    cv=c
-                    if self._key=="password":
-                        cv="*"
-                    lpart=self._val[0:self._pos]
+            elif ord(sc)==127: #BACK SPACE
+                if self._pos>0 and len(self._val)>0:
+                    psz = self._write_inputs_char_size(self._val[self._pos-1:self._pos])                    
+                    lpart=self._val[0:self._pos-1]
                     rpart=self._val[self._pos:]
-                    self._val=lpart + c + rpart
-                    self._pos+=1
-                    self._append_to_output("\x1b[K"+cv+rpart)
-                    rl = len(rpart)
-                    if rl>0:
-                        self._append_to_output("\x1b[" + str(rl) + "D")
-        elif self._key=="user" and ord(c[0])==27:
-            sep=c[1:]
-            if sep=="[D": #LEFT
-                if self._pos>0:
-                    self._append_to_output(c)
+                    self._val=lpart+rpart  
                     self._pos-=1                    
-            elif sep=="[C": #RIGHT
-                if self._pos<len(self._val):
-                    self._append_to_output(c)
-                    self._pos+=1
-            elif sep=="[H": #START
-                if self._pos>0:
-                    self._append_to_output("\x1b[" + str(self._pos) + "D")
-                    self._pos=0
-            elif sep=="[F": #END
-                if self._pos<len(self._val):
-                    self._append_to_output("\x1b[" + str(len(self._val)-self._pos) + "C")
-                    self._pos=len(self._val)
-            elif sep=="[3~": #CANC
-                if self._pos<len(self._val):
-                    lpart=self._val[0:self._pos]
-                    rpart=self._val[self._pos+1:]
-                    self._val=lpart+rpart
-                    self._append_to_output("\x1b[K"+rpart)
-                    rl = len(rpart)
+                    self._append_to_output("\x1b[" + str(psz) + "D\x1b[K"+rpart)
+                    rl = self._write_inputs_char_size(rpart)
                     if rl>0:
                         self._append_to_output("\x1b[" + str(rl) + "D")
-
+            elif ord(sc)>=32: #CHARACTER
+                cv=sc
+                if self._key=="password":
+                    cv="*"
+                lpart=self._val[0:self._pos]
+                rpart=self._val[self._pos:]
+                self._val=lpart + sc + rpart
+                self._pos+=1
+                self._append_to_output("\x1b[K"+cv+rpart)                
+                rl = self._write_inputs_char_size(rpart)
+                if rl>0:
+                    self._append_to_output("\x1b[" + str(rl) + "D")
+    
 class LinuxMac():
     
     def __init__(self, mgr, sid, col, row):
@@ -450,22 +514,28 @@ class LinuxMac():
     
     def initialize(self):
         try:
-            bdisauth = self._manager._shlmain._agent_main.get_config('shell.disable_authentication', False)            
-            if not bdisauth and os.getuid()==0:
+            bauth = self._manager._shlmain._agent_main.get_config('shell.enable_authentication', False)            
+            if bauth and os.getuid()==0:
+                try:
+                    import pwd
+                    import crypt
+                except Exception as e:
+                    self._manager._shlmain._agent_main.write_except(e,"AppShell:: missing python module pwd or crypt")
+                    self.terminate()
+                    return
                 self._login_request = LoginRequest(self)
             else:
                 self.open_session(None,None)
         except:
-            self.terminate() 
+            self.terminate()
         
-    
     def check_login(self,u,p):
         if self._manager.is_user_allowed(u):
             if agent.is_mac():
                 return self._check_login_mac(u,p)
             else:
                 return self._check_login_linux(u,p)
-        return False
+        return False        
     
     def _check_login_linux(self,u,p):        
         try:
@@ -578,13 +648,17 @@ class LinuxMac():
                     uid=None
                     udir=None
                     upshell=None
-                    if u is None:
-                        uinfo = pwd.getpwuid(os.getuid())
-                    else:
-                        uinfo = pwd.getpwnam(u)
-                    uid=uinfo.pw_uid
-                    udir=uinfo.pw_dir
-                    upshell=uinfo.pw_shell            
+                    try:
+                        import pwd
+                        if u is None:
+                            uinfo = pwd.getpwuid(os.getuid())
+                        else:
+                            uinfo = pwd.getpwnam(u)
+                        uid=uinfo.pw_uid
+                        udir=uinfo.pw_dir
+                        upshell=uinfo.pw_shell
+                    except:
+                        None
                     if uid is None:
                         uid=os.getuid()
                     if udir is None:
@@ -746,8 +820,7 @@ class LinuxMac():
             else:
                 return s
         except:
-            self.terminate() 
-
+            self.terminate()
 
 class Windows():
 
@@ -774,8 +847,8 @@ class Windows():
         return self._id
 
     def initialize(self):
-        bdisauth = self._manager._shlmain._agent_main.get_config('shell.disable_authentication', False)            
-        if not bdisauth and conpty.is_run_as_service():
+        bauth = self._manager._shlmain._agent_main.get_config('shell.enable_authentication', False)            
+        if bauth and conpty.is_run_as_service():
             self._login_request = LoginRequest(self)
         else:
             self.open_session(None,None)
@@ -843,8 +916,7 @@ class Windows():
             else:
                 return bt
         except:
-            self.terminate()
-        
+            self.terminate()        
         
     def change_rows_cols(self, rows, cols):
         if self._bterm == True:

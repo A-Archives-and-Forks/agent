@@ -5,7 +5,7 @@ This Source Code Form is subject to the terms of the Mozilla
 Public License, v. 2.0. If a copy of the MPL was not distributed
 with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 '''
-from ctypes import Structure, POINTER, windll, c_void_p, c_char_p, c_size_t, c_uint, HRESULT, WinError, wintypes
+from ctypes import Structure, POINTER, windll, c_void_p, c_char_p, c_size_t, c_uint, c_int, c_ulong, c_wchar_p, HRESULT, WinError, wintypes
 from ctypes.wintypes import *
 
 PVOID = LPVOID
@@ -479,9 +479,9 @@ class TOKEN_USER(Structure):
 GetCurrentProcess = windll.kernel32.GetCurrentProcess
 GetCurrentProcess.restype = HANDLE
 
-NtQueryInformationProcess = windll.ntdll.NtQueryInformationProcess
-NtQueryInformationProcess.argtypes = [HANDLE, INT, PVOID, ULONG, POINTER(ULONG)]
-
+GetUserProfileDirectoryW = windll.userenv.GetUserProfileDirectoryW
+GetUserProfileDirectoryW.argtypes = [c_void_p, c_wchar_p, POINTER(c_ulong)]
+GetUserProfileDirectoryW.restype = c_int
 
 TOKEN_QUERY = 0x0008
 TOKEN_ADJUST_PRIVILEGES = 0x0020

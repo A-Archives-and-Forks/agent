@@ -172,7 +172,7 @@ class ConPty(Thread):
     
             defpath = None
             try:
-                defpath = os.getcwdu().split(os.path.sep)[0]+os.path.sep                
+                defpath = utils.os_getcwd().split(os.path.sep)[0]+os.path.sep
                 if defpath[0]==os.path.sep:
                     defpath=None
             except:
@@ -180,6 +180,7 @@ class ConPty(Thread):
             
             
             if self._user is None:
+                
                 # Create process
                 hr = CreateProcessW(None,                                        # _In_opt_      LPCTSTR
                                     self._cmd,                                   # _Inout_opt_   LPTSTR
@@ -209,7 +210,7 @@ class ConPty(Thread):
                 tp.get_array()[0].Attributes = SE_PRIVILEGE_ENABLED
                 res = AdjustTokenPrivileges(ptoken, False, tp, 0, None, None)
                 '''
-                                    
+
                 # TOKEN USER
                 aruser = _split_user_domain(self._user)
                 pswd = self._password
@@ -220,6 +221,12 @@ class ConPty(Thread):
                 ret = LogonUserW(aruser["user"], aruser["domain"], pswd, logon_type, provider, ctypes.byref(htoken))
                 if ret == 0:
                     raise Exception(u"Failed to LogonUserW " + self._user)                                    
+                
+                path_buf = ctypes.create_unicode_buffer(1024)
+                path_size = ctypes.c_ulong(ctypes.sizeof(path_buf))
+                result = GetUserProfileDirectoryW(htoken, path_buf, ctypes.byref(path_size))
+                if result != 0:
+                    defpath=path_buf.value 
                 
                 # Create process
                 hr = CreateProcessAsUserW(htoken,                                # _In_          HANDLE
@@ -321,6 +328,7 @@ class ConPty(Thread):
                 None        
 
     def read(self):
+        sret=""
         MAX_READ = 1024*8
         lpBuffer = create_string_buffer(MAX_READ)
         lpNumberOfBytesRead = DWORD()
@@ -349,21 +357,20 @@ class ConPty(Thread):
                      )
             if hr == 0x0:
                 self.write_err(u"failed to read: " + str(hr))
-            return lpBuffer.raw[:lpNumberOfBytesRead.value]
-        else:
-            return ""
+            else:
+                sret=lpBuffer.raw[:lpNumberOfBytesRead.value]                
+        return sret        
 
     def write(self, data):
         lpBuffer = create_string_buffer(data.encode('utf8'))
         lpNumberOfBytesWritten = DWORD()
         hr = WriteFile(self._cmdIn,            # Handle to the file or i/o device
                   lpBuffer,                     # Pointer to the buffer that contains the data to be written
-                  sizeof(lpBuffer),             # Number of bytes to write
+                  sizeof(lpBuffer)-1,             # Number of bytes to write
                   lpNumberOfBytesWritten,       # Number of bytes written
                   NULL_PTR)                     # Not used
         if hr == 0x0:
-            self.write_err(u"Failed to write: " + str(hr))
-
+            self.write_err(u"Failed to write: " + str(hr))        
 
 if __name__ == '__main__':
     # Create a cmd.exe pty
