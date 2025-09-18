@@ -127,12 +127,14 @@ int SystemMng::getInfo(wchar_t** sret) {
 						sret.append(L"Windows 10 ");
 					}
 				} else {
-					if (iBuildNumber>=20348){
-						sret.append(L"Windows Server 2016 ");
+					if (iBuildNumber>=26010){
+						sret.append(L"Windows Server 2025 ");
+					}else if (iBuildNumber>=20348){
+						sret.append(L"Windows Server 2022 ");
 					}else if (iBuildNumber>=17763){
 						sret.append(L"Windows Server 2019 ");
 					}else{
-						sret.append(L"Windows Server 2022 ");
+						sret.append(L"Windows Server 2016 ");
 					}
 				}
 			}
