@@ -33,7 +33,10 @@ class Compile(compile_generic.Compile):
             conf["outname"]="dwagsoundcapture.dylib" 
             conf["cpp_include_paths"]=[self.get_path_tmp() + os.sep + "lib_rtaudio", self.get_path_tmp() + os.sep + "lib_opus"] 
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
-            conf["libraries"]=["rtaudio","opus"]
+            conf["frameworks"]=["Foundation","AVFoundation"]
+            conf["libraries"]=["rtaudio","opus"]            
+            conf["cpp_compiler_flags"]="-mmacosx-version-min=10.6"
+            conf["linker_flags"]="-mmacosx-version-min=10.6"            
         return conf
     
     def before_copy_to_native(self,osn):
@@ -44,7 +47,8 @@ class Compile(compile_generic.Compile):
 
 if __name__ == "__main__":    
     m = Compile()
-    #m.set_32bit()
+    #m.set_arch(compile_generic.ARCH_X86_64)
+    #m.set_arch(compile_generic.ARCH_X86_32)
     m.run()
     
     

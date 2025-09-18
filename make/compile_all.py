@@ -17,31 +17,36 @@ import compile_lib_screencapture
 import compile_lib_screencapture_bitblt
 import compile_lib_screencapture_xorg
 import compile_lib_screencapture_quartzdisplay
+import compile_lib_screencapture_kit
 import compile_lib_screencapture_desktopduplication
 import compile_lib_soundcapture
 import compile_os_win_launcher
 import compile_os_win_service
 import compile_os_win_updater
-
+import compile_generic
 
 
 class CompileAll():
     
     def __init__(self):
-        self._b32bit=False
+        self._arch=None
+        self._onlydeps=False
     
-    def set_32bit(self):
-        self._b32bit=True
+    def set_arch(self, v):
+        self._arch=v
+    
+    def set_onlydeps(self, v):
+        self._onlydeps=v
     
     def get_path_tmp(self):
-        if self._b32bit:
-            return utils.PATHTMP+"32"
+        if self._arch is not None:
+            return utils.PATHTMP+"_"+self._arch
         else:
             return utils.PATHTMP
     
     def get_path_native(self):
-        if self._b32bit:
-            return utils.PATHNATIVE+"32"
+        if self._arch is not None:
+            return utils.PATHNATIVE+"_"+self._arch
         else:
             return utils.PATHNATIVE
     
@@ -63,7 +68,7 @@ class CompileAll():
             bok=False
             utils.info("ERROR DEPENDENCIES")
         
-        if bok:
+        if not self._onlydeps and bok:
             utils.info("BEGIN COMPILE ALL")
             try:
                 self._compile(compile_lib_core,arstatus)
@@ -81,6 +86,7 @@ class CompileAll():
                     self._compile(compile_lib_screencapture_xorg,arstatus)
                 if utils.is_mac():
                     self._compile(compile_lib_screencapture_quartzdisplay,arstatus)
+                    #self._compile(compile_lib_screencapture_kit,arstatus)
                 self._compile(compile_lib_soundcapture,arstatus)
                 utils.info("END COMPILE ALL")
             except:
@@ -104,8 +110,8 @@ class CompileAll():
         mcp = md.Compile()
         smsg=mcp.get_name()
         try:
-            if self._b32bit:
-                mcp.set_32bit()
+            if self._arch is not None:
+                mcp.set_arch(self._arch)
                   
             mcp.run()
             smsg+=" - OK!"
@@ -152,8 +158,10 @@ class CompileAll():
                 if sfx is None or "generic" in sfx:
                     utils.info("os not detected.")
                     raise Exception("You have to compile it manually.")
-                if self._b32bit:
-                    sfx=sfx.replace("64","32")                
+                if self._arch==compile_generic.ARCH_X86_64:
+                    sfx=sfx.replace("arm64_v1","x86_64")
+                elif self._arch==compile_generic.ARCH_X86_32:
+                    sfx=sfx.replace("64","32")
                 utils.init_path(spth)
                 utils.info("download headers and library ...")
                 nurl = utils.get_node_url()
@@ -193,7 +201,9 @@ class CompileAll():
         
 if __name__ == "__main__":
     m = CompileAll()
-    #m.set_32bit()
+    #m.set_arch(compile_generic.ARCH_X86_64)
+    #m.set_arch(compile_generic.ARCH_X86_32)
+    #m.set_onlydeps(True)
     m.run()
     
     

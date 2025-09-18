@@ -19,27 +19,30 @@ class Compile(compile_generic.Compile):
             conf["outname"]="dwaggdi.dll" 
             conf["cpp_include_paths"]=[] 
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
+            conf["cpp_compiler_flags"]="-O2" #USED -O2 BECAUSE WITH -O3 DRWEB ANTIVIRUS MARK FILE AS NOT TRUST
             conf["libraries"]=["gdi32", "shell32", "user32", "userenv"]
             conf["linker_flags"]="-static-libgcc -static-libstdc++ -shared"
         elif osn=="linux":
             conf={}
             conf["outname"]="dwaggdi.so" 
-            conf["cpp_include_paths"]=[] 
+            conf["cpp_include_paths"]=["/usr/include/freetype2"]
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
-            conf["libraries"]=["X11", "Xpm"]
+            conf["libraries"]=["X11", "Xpm","Xft"]
         elif osn=="mac":
             None
             conf={}
             conf["outname"]="dwaggdi.dylib" 
             conf["cpp_include_paths"]=[] 
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
-            conf["libraries"]=[]            
-            conf["linker_flags"]="-framework Cocoa -framework ApplicationServices -framework SystemConfiguration -framework IOKit"
+            conf["frameworks"]=["Cocoa","ApplicationServices","IOKit","SystemConfiguration"]
+            conf["cpp_compiler_flags"]="-mmacosx-version-min=10.6"
+            conf["linker_flags"]="-mmacosx-version-min=10.6"            
         return conf
 
 if __name__ == "__main__":
     m = Compile()
-    #m.set_32bit()
+    #m.set_arch(compile_generic.ARCH_X86_64)
+    #m.set_arch(compile_generic.ARCH_X86_32)
     m.run()
     
     

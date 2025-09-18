@@ -16,7 +16,7 @@ class Compile(compile_generic.Compile):
         conf=None
         if osn=="windows":
             conf={}
-            conf["outname"]="dwagupd.exe" 
+            conf["outname"]="dwagupd.dll" 
             conf["cpp_include_paths"]=[]
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
             conf["libraries"]=[]

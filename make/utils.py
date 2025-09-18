@@ -236,7 +236,9 @@ def compile_lib_path(cconf,pathsrc,pathdst,srcfiles):
             scmd=scmd.replace("%NAMECPP%", pathsrc + os.sep + srcname)        
             if not system_exec(scmd,pathdst):
                 raise Exception("Compiler error.")
-            srcfiles.append(srcname.split(".")[0] + ".o ")   
+            if not os.path.exists(pathdst + os.sep + srcname.split(".")[0] + ".o"):
+                raise Exception("Compiler error.")
+            srcfiles.append(srcname.split(".")[0] + ".o ")
 
 def compile_lib(mainconf):
     
@@ -250,9 +252,11 @@ def compile_lib(mainconf):
         cconf = mainconf["windows"]        
         if "cpp_compiler_flags" in cconf:
             cflgs=cconf["cpp_compiler_flags"]
+        if not ("-O2" in cflgs or "-O1" in cflgs or "-O0" in cflgs):
+            cflgs+=" -O3"
         if "linker_flags" in cconf:
             lflgs=cconf["linker_flags"]
-        cconf["cpp_compiler"]="g++ " + cflgs + " -DOS_WINDOWS %INCLUDE_PATH% -O3 -g3 -Wall -c -fmessage-length=0 -o \"%NAMEO%\" \"%NAMECPP%\""
+        cconf["cpp_compiler"]="g++ " + cflgs + " -DOS_WINDOWS %INCLUDE_PATH% -g3 -Wall -c -fmessage-length=0 -o \"%NAMEO%\" \"%NAMECPP%\""
         cconf["linker"]="g++ " + lflgs + " %LIBRARY_PATH% -s -municode -o %OUTNAME% %SRCFILES% %LIBRARIES%"
     elif is_linux():
         if not "linux" in mainconf:

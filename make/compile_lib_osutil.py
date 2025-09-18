@@ -43,7 +43,7 @@ class Compile(compile_generic.Compile):
         
 if __name__ == "__main__":
     m = Compile()
-    #m.set_32bit()
+    #m.set_arch(compile_generic.ARCH_X86_32)
     m.run()
     
     
