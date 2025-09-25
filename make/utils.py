@@ -103,6 +103,12 @@ def download_file(url,dest):
     infile = url_open(url)
     with open(dest,'wb') as outfile:
         outfile.write(infile.read())
+
+def download_prop(url):
+    info("download prop " + url)
+    infile = url_open(url)
+    dt=bytes_to_str(infile.read(),"utf-8")
+    return json.loads(dt)
     
 def remove_file(src):
     info("remove file " + src)
@@ -341,11 +347,8 @@ def xml_to_prop(s):
         prp[child.attrib['key']] = child.text
     return prp
 
-def get_node_url():
-    contents = url_open(MAIN_URL + "getAgentFile.dw?name=files.xml").read();
-    prp = xml_to_prop(contents)
-    return prp["nodeUrl"]
-   
+def get_site_url():
+    return MAIN_URL   
 
 def read_json_file(fn):
     appjs=None

@@ -56,13 +56,14 @@ class CompileAll():
         utils.init_path(self.get_path_native())
         utils.info("BEGIN DEPENDENCIES")
         try:
+            prpfiles = utils.download_prop(utils.get_site_url() + "getAgentConfig.dw?id=latest")
             if utils.is_windows():
-                self._dependency("lib_gcc", "8.1.0", arstatus)
-                self._dependency("lib_stdcpp", "8.1.0", arstatus)
-            self._dependency("lib_z", "1.2.11", arstatus)
-            self._dependency("lib_turbojpeg", "2.1.1", arstatus)
-            self._dependency("lib_opus", "21.3.1", arstatus)
-            self._dependency("lib_rtaudio", "5.1.0", arstatus)
+                self._dependency(prpfiles,"lib_gcc", "8.1.0", arstatus)
+                self._dependency(prpfiles,"lib_stdcpp", "8.1.0", arstatus)
+            self._dependency(prpfiles,"lib_z", "1.2.11", arstatus)
+            self._dependency(prpfiles,"lib_turbojpeg", "2.1.1", arstatus)
+            self._dependency(prpfiles,"lib_opus", "21.3.1", arstatus)
+            self._dependency(prpfiles,"lib_rtaudio", "5.1.0", arstatus)
             utils.info("END DEPENDENCIES")
         except:
             bok=False
@@ -136,7 +137,7 @@ class CompileAll():
                 f.write(appdata)
                 f.close()
     
-    def _dependency(self,snm,sver,ars):        
+    def _dependency(self,prpfiles,snm,sver,ars):        
         spth=self.get_path_tmp() + os.sep + snm;
         smsg = snm + " " + sver
         utils.info("BEGIN " + snm)        
@@ -164,16 +165,16 @@ class CompileAll():
                     sfx=sfx.replace("64","32")
                 utils.init_path(spth)
                 utils.info("download headers and library ...")
-                nurl = utils.get_node_url()
-                
                 if snm!="lib_gcc" and snm!="lib_stdcpp":
-                    appnm="headers_" + snm + ".zip"
-                    utils.download_file(nurl + "getAgentFile.dw?name=" + appnm , spth + os.sep + appnm)
+                    appnm="headers_" + snm + ".zip"                    
+                    fitm=prpfiles["files"]["agent/headers/" + snm + ".zip"]                    
+                    utils.download_file(utils.get_site_url() + "app/" + fitm["file"] , spth + os.sep + appnm)                    
                     utils.unzip_file(spth + os.sep + appnm, spth + os.sep)
                     utils.remove_file(spth + os.sep + appnm)
                 
                 appnm=snm + "_" + sfx + ".zip"
-                utils.download_file(nurl + "getAgentFile.dw?name=" + appnm , spth + os.sep + appnm)
+                fitm=prpfiles["files"]["agent/" + sfx + "/" + snm + ".zip"]
+                utils.download_file(utils.get_site_url() + "app/" + fitm["file"] , spth + os.sep + appnm)
                 utils.unzip_file(spth + os.sep + appnm, spth + os.sep, "native/")
                 utils.remove_file(spth + os.sep + appnm)
                 #FIX Version
