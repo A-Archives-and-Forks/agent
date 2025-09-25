@@ -35,7 +35,6 @@ import ctypes
 import subprocess
 import utils
 
-
 _MAIN_URL = "https://www.dwservice.net/"
 _MAIN_URL_QA = "https://qa.dwservice.net/"
 _MAIN_URL_DEV = "https://dev.dwservice.net/dws_site/"
@@ -1404,22 +1403,21 @@ class Install:
         if "downloadtext" in self._options:
             dwnmsg=self._options["downloadtext"]
         else:
-            dwnmsg=self._get_message('downloadFile')
+            dwnmsg=self._get_message("downloadFile")
         perc = int((float(rtp.get_byte_transfer()) / float(rtp.get_byte_length())) * 100.0)
-        msg=dwnmsg.format(rtp.get_property('file_name'))
-        prog = rtp.get_property('prog_start') + ((rtp.get_property('prog_end') - rtp.get_property('prog_start')) * (float(perc)/100.0))
+        msg=dwnmsg.format(rtp.get_property("file_name"))
+        prog = rtp.get_property("prog_start") + ((rtp.get_property("prog_end") - rtp.get_property("prog_start")) * (float(perc)/100.0))
         if "downloadtext" in self._options:
             perc=None
         self._uinterface.wait_message(msg, perc, prog)
     
-    def _download_file(self, node_url, name, version, pstart,  pend):
+    def _download_file(self, url, name, pstart,  pend):
         pth = self._install_path.get()
-        url = node_url +  "getAgentFile.dw?name=" + name + "&version=" + version
         file_name = pth + utils.path_sep + name
-        rtp = communication.Response_Transfer_Progress({'on_data': self._download_progress})
-        rtp.set_property('file_name', name)
-        rtp.set_property('prog_start', pstart)
-        rtp.set_property('prog_end', pend)
+        rtp = communication.Response_Transfer_Progress({"on_data": self._download_progress})
+        rtp.set_property("file_name", name)
+        rtp.set_property("prog_start", pstart)
+        rtp.set_property("prog_end", pend)
         communication.download_url_file(url, file_name, self._proxy, rtp)
     
     def _check_hash_file(self, name, shash):
@@ -1427,8 +1425,8 @@ class Install:
         fpath=pth + utils.path_sep + name
         
         md5 = hashlib.md5()
-        with utils.file_open(fpath,'rb') as f: 
-            for chunk in iter(lambda: f.read(8192), b''): 
+        with utils.file_open(fpath,"rb") as f: 
+            for chunk in iter(lambda: f.read(8192), b""): 
                 md5.update(chunk)
         h = md5.hexdigest()
         if h!=shash:
@@ -1436,7 +1434,7 @@ class Install:
 
     def _unzip_file(self, name, unzippath):
         pth = self._install_path.get()
-        if unzippath!='':
+        if unzippath!="":
             unzippath+=utils.path_sep 
         fpath=pth + utils.path_sep + name
         zfile = utils.zipfile_open(fpath)
@@ -1472,7 +1470,7 @@ class Install:
     
     def store_prop_json(self, prp, fname):
         s = json.dumps(prp, sort_keys=True, indent=1)
-        f = utils.file_open(fname, 'wb')
+        f = utils.file_open(fname, "wb")
         f.write(utils.str_to_bytes(s,"utf8"))
         f.close()
     
@@ -1497,10 +1495,10 @@ class Install:
             dwnmsg=self._options["downloadtext"]
             iniperc=None
         else:
-            dwnmsg=self._get_message('downloadFile')
+            dwnmsg=self._get_message("downloadFile")
         
         if self._bmock:            
-            msg=dwnmsg.format(u'MOCK')
+            msg=dwnmsg.format(u"MOCK")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(2)
             self._uinterface.wait_message(msg, None,  pend)
@@ -1508,8 +1506,8 @@ class Install:
         
         pth = self._install_path.get()
         fileversions = {}
-                
-        msg=dwnmsg.format(u'config.xml')
+                        
+        msg=dwnmsg.format(u"distr.json")
         self._uinterface.wait_message(msg,  iniperc,  pstart)
         jocheck={}
         jocheck["version"]=_INSTALLER_VERSION
@@ -1525,10 +1523,12 @@ class Install:
                 jocheck["silent"]["key"]=self._options["key"]                
             elif "user" in self._options:
                 jocheck["silent"]["user"]=self._options["user"]
-        scheck=utils.bytes_to_str(utils.enc_base64_encode(utils.str_to_bytes(json.dumps(jocheck),"utf8")))        
-        prpconf = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=config.xml&check=" + scheck, self._proxy)
-        if "error" in prpconf:
-            raise Exception(prpconf["error"])
+        scheck = utils.bytes_to_str(utils.enc_base64_encode(utils.str_to_bytes(json.dumps(jocheck),"utf8")))
+        prpfiles = communication.get_url_prop(self._get_main_url() + "getAgentConfig.dw?id=latest&checkInstaller=" + scheck, self._proxy)
+        if "error" in prpfiles:
+            raise Exception(prpfiles["error"])
+        prpconf = {}
+        prpconf["url_primary"]=self._get_main_url()
         if "name" in self._options:
             prpconf["name"] = self._options["name"]
         if "topinfo" in self._options:
@@ -1548,9 +1548,9 @@ class Install:
             prpconf["leftcolor"]=self._options["leftcolor"]                    
         if not self._runWithoutInstall:
             if "listenport" in self._options:
-                prpconf['listen_port'] = self._options["listenport"]
+                prpconf["listen_port"] = self._options["listenport"]
             else:
-                prpconf['listen_port'] = self._listen_port
+                prpconf["listen_port"] = self._listen_port
         
         if self._runWithoutInstall:
             try:
@@ -1564,8 +1564,8 @@ class Install:
                         bmonok=True
                     except:
                         None
-                if utils.path_exists(self._install_path.get() + utils.path_sep +  u'config.json'):				
-                    appconf = self.load_prop_json(self._install_path.get() + utils.path_sep +  u'config.json')
+                if utils.path_exists(self._install_path.get() + utils.path_sep +  u"config.json"):				
+                    appconf = self.load_prop_json(self._install_path.get() + utils.path_sep +  u"config.json")
                     if "preferred_run_user" in appconf:
                         prpconf["preferred_run_user"]=appconf["preferred_run_user"]
                     if bmonok:
@@ -1589,61 +1589,59 @@ class Install:
         self._copy_custom_images(prpconf, pth)        
         if self._skipcertsvalidity:
             prpconf["ssl_cert_required"]=False        
-        self.store_prop_json(prpconf, pth + utils.path_sep + u'config.json')
+        self.store_prop_json(prpconf, pth + utils.path_sep + u"config.json")
         
         if not (self._runWithoutInstall and utils.path_exists(pth + utils.path_sep + u"config.json") 
-                and utils.path_exists(pth + utils.path_sep + u"fileversions.json") and utils.path_exists(pth + utils.path_sep + u"agent.py") 
+                and utils.path_exists(pth + utils.path_sep + u"versions.json") and utils.path_exists(pth + utils.path_sep + u"agent.py") 
                 and utils.path_exists(pth + utils.path_sep + u"communication.py") and utils.path_exists(pth + utils.path_sep + u"ipc.py")):
-            msg=dwnmsg.format('files.xml')
-            self._uinterface.wait_message(msg, iniperc,  pstart)
-            prpfiles = communication.get_url_prop(self._get_main_url() + "getAgentFile.dw?name=files.xml", self._proxy)
-            
-            if "nodeUrl" in prpfiles:
-                node_url = prpfiles['nodeUrl']
-            if node_url is None or node_url=="":
-                raise Exception("Download files: Node not available.")
             fls = []            
             import detectinfo
             appnsfx = detectinfo.get_native_suffix()
             if not self._runWithoutInstall:
                 if appnsfx is not None:
-                    fls.append({'name':u'agentupd_' + appnsfx + '.zip', 'unzippath':u'native'})
+                    fls.append({"suffix": appnsfx, "name":u"agentupd.zip", "unzippath":u"native"})
             
-            fls.append({'name':'agent.zip', 'unzippath':u''})
+            fls.append({"name":"agent.zip", "unzippath":u""})
             if not self._runWithoutInstall:
-                fls.append({'name':u'agentui.zip', 'unzippath':u''})
-            fls.append({'name':u'agentapps.zip', 'unzippath':u''})            
+                fls.append({"name":u"agentui.zip", "unzippath":u""})
+            fls.append({"name":u"agentapps.zip", "unzippath":u""})            
             if appnsfx is not None:
                 if not appnsfx=="linux_generic":
                     if not self._runWithoutInstall:
-                        fls.append({'name':u'agentui_' + appnsfx + u'.zip', 'unzippath':u'native'})
-                    fls.append({'name':u'agentlib_' + appnsfx + u'.zip', 'unzippath':u'native'})
+                        fls.append({"suffix": appnsfx, "name":u"agentui.zip", "unzippath":u"native"})
+                    fls.append({"suffix": appnsfx, "name": u"agentlib.zip", "unzippath":u"native"})
             step = (pend-pstart) / float(len(fls))
             pos = pstart
             for i in range(len(fls)):
-                fnm=fls[i]['name'];
+                fnm=fls[i]["name"];
                 file_name = pth + utils.path_sep + fnm
                 try:
                     utils.path_remove(file_name)
                 except Exception:
                     None
-                self._append_log(u"Download file " + fnm + " ...")
-                self._download_file(node_url, fnm, prpfiles[fnm + '@version'], pos,  pos+step)
+                
+                if "suffix" in fls[i]:
+                    unm="agent/" + fls[i]["suffix"]+"/"+fnm
+                else:
+                    unm="agent/" + fnm
+                fitm=prpfiles["files"][unm]
+                self._append_log(u"Download file " + fnm + " ...")                
+                self._download_file(self._get_main_url() + "app/" + fitm["file"], fnm, pos, pos+step)                
                 self._append_log(u"Download file " + fnm + u".OK!")
                 self._append_log(u"Check file hash " + fnm + " ...")
-                self._check_hash_file(fnm, prpfiles[fnm + '@hash'])
+                self._check_hash_file(fnm, fitm["md5"])
                 self._append_log(u"Check file hash " + fnm + u".OK!")
                 self._append_log(u"Unzip file " + fnm + " ...")
-                self._unzip_file(fnm, fls[i]['unzippath'])
+                self._unzip_file(fnm, fls[i]["unzippath"])
                 self._append_log(u"Unzip file " + fnm + u".OK!")
                 try:
                     utils.path_remove(file_name)
                 except Exception:
                     None
-                fileversions[fnm ]=prpfiles[fnm + '@version']
+                fileversions[unm]=fitm
                 pos+=step
             
-            self.store_prop_json(fileversions, pth + utils.path_sep + u'fileversions.json')
+            self.store_prop_json(fileversions, pth + utils.path_sep + u"versions.json")
     
     def _count_file_in_path(self, valid_path):
         x = 0
@@ -1676,7 +1674,7 @@ class Install:
         self._uinterface.wait_message(msg, 0, pstart)
         nfile = self._count_file_in_path(fs)
         step = (pend-pstart) / nfile
-        self._copy_tree_file(fs, ds, {'message':msg,  'pstart':pstart,  'pend':pend,  'progr':pstart, 'step':step })
+        self._copy_tree_file(fs, ds, {"message":msg,  "pstart":pstart,  "pend":pend,  "progr":pstart, "step":step })
     
     def _make_directory(self, pstart, pend):
         if self._bmock:
@@ -1684,7 +1682,7 @@ class Install:
             
         pth = self._install_path.get()
         if utils.path_exists(pth):
-            self._uinterface.wait_message(self._get_message('removeFile'), None, pstart)
+            self._uinterface.wait_message(self._get_message("removeFile"), None, pstart)
             try:
                 try:
                     self._native.stop_service()
@@ -1693,43 +1691,43 @@ class Install:
                     None 
                 utils.path_remove(pth)
             except:
-                raise Exception(u'Can not remove path.') #Inserire messaggio in lingua
+                raise Exception(u"Can not remove path.") #Inserire messaggio in lingua
             
         try:
-            self._uinterface.wait_message(self._get_message('pathCreating'),  None, pend)
+            self._uinterface.wait_message(self._get_message("pathCreating"),  None, pend)
             utils.path_makedirs(pth)
         except:
-            raise Exception(self._get_message('pathNotCreate'))
+            raise Exception(self._get_message("pathNotCreate"))
         
     def copy_runtime(self,pstart, pend):
         if self._bmock:
-            msg=self._get_message('copyFiles')
+            msg=self._get_message("copyFiles")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
             self._uinterface.wait_message(msg,  None,  pend)
             return
         ds=self._install_path.get() + utils.path_sep + "runtime"
-        msg=self._get_message('copyFiles')
+        msg=self._get_message("copyFiles")
         if utils.path_exists(_RUNTIME_PATH):
             self._copy_tree(_RUNTIME_PATH,ds,msg,pstart,pend)
         else:
             if not self._native.prepare_runtime_by_os(ds):
-                raise Exception(self._get_message('missingRuntime'))
+                raise Exception(self._get_message("missingRuntime"))
     
     
     def copy_native(self,pstart, pend):
         if self._bmock:
-            msg=self._get_message('copyFiles')
+            msg=self._get_message("copyFiles")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
             self._uinterface.wait_message(msg,  None,  pend)
             return
         
         if not utils.path_exists(_NATIVE_PATH):
-            raise Exception(self._get_message('missingNative'))            
+            raise Exception(self._get_message("missingNative"))            
         ds=self._install_path.get() + utils.path_sep + "native"
-        msg=self._get_message('copyFiles')
-        self._copy_tree(_NATIVE_PATH,ds,msg,0.76, 0.8)
+        msg=self._get_message("copyFiles")
+        self._copy_tree(_NATIVE_PATH,ds,msg, 0.76, 0.8)
         
         #CREATE installer.ver
         dsver=ds + utils.path_sep + "installer.ver"
@@ -1742,15 +1740,15 @@ class Install:
     
     def _install_service(self, pstart, pend):
         if self._bmock:
-            msg=self._get_message('installService')
+            msg=self._get_message("installService")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
-            msg=self._get_message('startService')
+            msg=self._get_message("startService")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
             self._uinterface.wait_message(msg,  None,  pend)
             return
-        msg=self._get_message('installService')
+        msg=self._get_message("installService")
         self._uinterface.wait_message(msg, None,  pstart)
         
         self._append_log(u"Service - Try to remove dirty installation...")
@@ -1759,23 +1757,23 @@ class Install:
                 
         self._append_log(u"Service - Installation...")
         if not self._native.install_service():
-            raise Exception(self._get_message('installServiceErr'))
+            raise Exception(self._get_message("installServiceErr"))
             
         self._append_log(u"Service - Starting...")
-        msg=self._get_message('startService')
+        msg=self._get_message("startService")
         self._uinterface.wait_message(msg, None,  pend)
         if not self._native.start_service():
             raise Exception(self._get_message("startServiceErr"))        
     
     def _install_monitor(self, pstart, pend):
         if self._bmock:
-            msg=self._get_message('installMonitor')
+            msg=self._get_message("installMonitor")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
             self._uinterface.wait_message(msg,  None,  pend)
             return
         
-        msg=self._get_message('installMonitor')
+        msg=self._get_message("installMonitor")
         self._uinterface.wait_message(msg,  None, pstart)        
         
         self._append_log(u"Monitor - Stopping...")
@@ -1786,18 +1784,18 @@ class Install:
         
         self._append_log(u"Monitor - Installing...")
         if not self._native.install_auto_run_monitor():
-            raise Exception(self._get_message('installMonitorErr'))
+            raise Exception(self._get_message("installMonitorErr"))
         self._uinterface.wait_message(msg,  None, pend)
     
     def _install_shortcuts(self, pstart, pend):
         if self._bmock:
-            msg=self._get_message('installShortcuts')
+            msg=self._get_message("installShortcuts")
             self._uinterface.wait_message(msg,  None,  pstart)
             time.sleep(1)
             self._uinterface.wait_message(msg,  None,  pend)
             return
         
-        msg=self._get_message('installShortcuts')
+        msg=self._get_message("installShortcuts")
         self._uinterface.wait_message(msg,  None, pstart)
         
         self._append_log(u"Shortcut - Try to remove dirty installation...")
@@ -1805,7 +1803,7 @@ class Install:
         
         self._append_log(u"Shortcut - Installing...")
         if not self._native.install_shortcuts():
-            raise Exception(self._get_message('installShortcutsErr'))
+            raise Exception(self._get_message("installShortcutsErr"))
         self._uinterface.wait_message(msg,  None, pend)
     
     def step_config_init(self, curui):
