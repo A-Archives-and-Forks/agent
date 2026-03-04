@@ -63,7 +63,7 @@ class Resource():
         
     def req_listdiskpartition(self, cinfo ,params):
         ret = self._osnative.get_diskpartition_info()
-        return json.dumps({'items' : ret})
+        return json.dumps({"items": ret})
         
     def req_performanceinfo(self, cinfo ,params):
         ret = self._osnative.get_performance_info()
@@ -73,39 +73,30 @@ class Resource():
         ret = self._osnative.get_task_list()
         #ORDINA PER NOME
         ret = sorted(ret, key=lambda k: k['Name'].lower()) 
-        return json.dumps({'items' : ret})
+        return json.dumps({"items":ret})
     
     def req_killtask(self, cinfo ,params):
         pid = agent.get_prop(params,"pid", None)
         bok = self._osnative.task_kill(int(pid));
-        if (bok is True):
-            ret = "{ok: true}"
-        else:
-            ret = "{ok: false}"
+        ret = json.dumps({"ok":bok})
         return ret
     
     def req_listservice(self, cinfo ,params):
         ret = self._osnative.get_service_list()
         #ORDINA PER NOME
         ret = sorted(ret, key=lambda k: k['Name'].lower()) 
-        return json.dumps({'items' : ret})
+        return json.dumps({"items":ret})
         
     def req_startservice(self, cinfo ,params):
         name = agent.get_prop(params,"name", None)
         bok = self._osnative.service_start(name);
-        if (bok is True):
-            ret = "{ok: true}"
-        else:
-            ret = "{ok: false}"
+        ret = json.dumps({"ok":bok})
         return ret
     
     def req_stopservice(self, cinfo ,params):
         name = agent.get_prop(params,"name", None)
         bok = self._osnative.service_stop(name);
-        if (bok is True):
-            ret = "{ok: true}"
-        else:
-            ret = "{ok: false}"
+        ret = json.dumps({"ok":bok})
         return ret
 
 class NativeWindows:
@@ -332,7 +323,7 @@ class NativeLinux:
                     lines = f.readlines()
                 finally:
                     f.close()
-                search = re.compile('cpu\d')
+                search = re.compile('cpu\\d')
                 for line in lines:
                     line = line.split(' ')[0]
                     if search.match(line):
@@ -458,7 +449,7 @@ class NativeLinux:
     def get_service_list(self):
         ret=[]
         if self._which("systemctl"):
-            p = subprocess.Popen("systemctl --all --full list-units | grep \.service", stdout=subprocess.PIPE, shell=True)
+            p = subprocess.Popen("systemctl --all --full list-units | grep \\.service", stdout=subprocess.PIPE, shell=True)
             (po, pe) = p.communicate()
             p.wait()
             if po is not None and len(po)>0:
@@ -643,7 +634,7 @@ class NativeMac:
             ps = TMP_bytes_to_str(subprocess.Popen(['ps', '-caxm', '-orss,comm'], stdout=subprocess.PIPE).communicate()[0])
             vm = TMP_bytes_to_str(subprocess.Popen(['vm_stat'], stdout=subprocess.PIPE).communicate()[0])
             processLines = ps.split('\n')
-            sep = re.compile('[\s]+')
+            sep = re.compile('[\\s]+')
             for row in range(1,len(processLines)):
                 rowText = processLines[row].strip()
                 rowElements = sep.split(rowText)
@@ -652,12 +643,12 @@ class NativeMac:
                 except:
                     rss = 0 
             vmLines = vm.split('\n')
-            sep = re.compile(':[\s]+')
+            sep = re.compile(':[\\s]+')
             vmStats = {}
             for row in range(1,len(vmLines)-2):
                 rowText = vmLines[row].strip()
                 rowElements = sep.split(rowText)
-                vmStats[(rowElements[0])] = int(rowElements[1].strip('\.')) * 4096
+                vmStats[(rowElements[0])] = int(rowElements[1].strip('\\.')) * 4096
             
             ret["memoryPhysicalTotal"]=vmStats["Pages wired down"]+vmStats["Pages active"]+vmStats["Pages inactive"]+vmStats["Pages free"]
             ret["memoryPhysicalAvailable"]= vmStats["Pages wired down"]+vmStats["Pages active"]+vmStats["Pages inactive"]

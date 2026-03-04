@@ -143,6 +143,7 @@ class TextEditor():
             s = endl.join(s.split("\n"))            
             text_file.write(TMP_str_to_bytes(s,enc))
         finally:
+            utils.file_sync(text_file)
             text_file.close()
         if utils.path_exists(path):
             if utils.path_isdir(path):
