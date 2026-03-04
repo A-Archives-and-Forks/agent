@@ -16,10 +16,10 @@ class Compile(compile_generic.Compile):
         if osn=="linux":
             conf={}
             conf["outname"]="dwagscreencapturewayland.so" 
-            conf["cpp_include_paths"]=["/usr/include/dbus-1.0","/usr/lib/dbus-1.0/include","/usr/include/pipewire-0.3","/usr/include/spa-0.2"] 
+            conf["cpp_include_paths"]=["/usr/include/dbus-1.0","/usr/lib/dbus-1.0/include","/usr/lib/x86_64-linux-gnu/dbus-1.0/include","/usr/include/pipewire-0.3","/usr/include/spa-0.2"] 
             #conf["cpp_library_paths"]=""
             conf["libraries"]=["dbus-1", "pipewire-0.3"]
-            conf["cpp_compiler_flags"]="-DOS_WAYLAND"
+            conf["cpp_compiler_flags"]="-DOS_WAYLAND -Wno-unused-result"
         return conf
     
 
