@@ -8,7 +8,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include "screencapturenativequartzdisplay.h"
 
 int DWAScreenCaptureVersion(){
-	return 1;
+	return 2;
 }
 
 void DWAScreenCaptureFreeMemory(void* pnt){
@@ -238,11 +238,21 @@ void DWAScreenCaptureSetClipboardText(wchar_t* wText){
 
 //// TO DO 30/09/22 REMOVE ClipboardText
 void DWAScreenCaptureGetClipboardChanges(CLIPBOARD_DATA* clipboardData){
-
+	clipboardData->type=0;
+	long ccount=macobjcGetClipboardChangeCount();
+	if (clipboardChangeCount!=ccount){
+		clipboardChangeCount=ccount;
+		wchar_t* textPtr=NULL;
+		wchar_t** wText=&textPtr;
+		int sz = macobjcGetClipboardText(wText);
+		clipboardData->type=1; //TEXT
+		clipboardData->data=(unsigned char*)*wText;
+		clipboardData->sizedata=(sz * sizeof(wchar_t));
+	}
 }
 
 void DWAScreenCaptureSetClipboard(CLIPBOARD_DATA* clipboardData){
-
+	macobjcSetClipboardText((wchar_t*)clipboardData->data);
 }
 ////////////////////////////////////////////////
 
@@ -318,9 +328,15 @@ int DWAScreenCaptureGetMonitorsInfo(MONITORS_INFO* moninfo){
 	moninfo->changed=0;
 	CGDisplayCount numDisplays=0;
 	CGGetOnlineDisplayList(0, 0, &numDisplays);
-	CGDirectDisplayID display[numDisplays];
+
+	//CGDirectDisplayID display[numDisplays];
+	//CGDisplayErr err;
+	//err = CGGetOnlineDisplayList(numDisplays, display, &numDisplays);
+
 	CGDisplayErr err;
-	err = CGGetOnlineDisplayList(numDisplays, display, &numDisplays);
+	std::vector<CGDirectDisplayID> display(numDisplays);
+	err = CGGetOnlineDisplayList(numDisplays, display.data(), &numDisplays);
+
 	if (err == CGDisplayNoErr){
 		for (CGDisplayCount i = 0; i < numDisplays; ++i) {
 			if(CGDisplayMirrorsDisplay(display[i]) == kCGNullDirectDisplay){

@@ -272,50 +272,75 @@ void dbusClipboardSelectionReadReply(DBusMessage* reply,CLIPBOARD_DATA* clipboar
 	DBusMessageIter iter;
 	dbus_message_iter_init(reply, &iter);
 	if (DBUS_TYPE_UNIX_FD == dbus_message_iter_get_arg_type(&iter)) {
-		int fd;
-		dbus_message_iter_get_basic(&iter, &fd);
-		bool bok=false;
-		char *buffer = NULL;
-		size_t chunksize=1024;
-		size_t totalsize=0;
-		size_t pos=0;
-		ssize_t bytesread=0;
-		while(true){
-			if (pos>=totalsize){
-				totalsize=pos+chunksize;
-				buffer = (char *)realloc(buffer, totalsize);
-				if (!buffer) {
-					bok=false;
-					break;
+		int fd_orig;
+		dbus_message_iter_get_basic(&iter, &fd_orig);
+		int fd = dup(fd_orig);
+		if (fd != -1) {
+			if (fcntl(fd, F_SETFL, O_NONBLOCK) == -1) {
+			    close(fd);
+			}else{
+				struct pollfd pfd = {
+				    .fd = fd,
+				    .events = POLLIN,
+				};
+				bool bok=false;
+				char *buffer = NULL;
+				size_t chunksize=65536;
+				size_t totalsize=0;
+				size_t pos=0;
+				while(true){
+					int ret = poll(&pfd, 1, 100);
+					if (ret == -1) {
+						//std::cout << "poll() failed" << std::endl;
+						break;
+					} else if (ret == 0) {
+						continue;
+					}
+					if (pos>=totalsize){
+						totalsize=pos+chunksize;
+						buffer = (char *)realloc(buffer, totalsize);
+						if (!buffer) {
+							bok=false;
+							break;
+						}
+					}
+					ssize_t bytesread = read(fd, buffer + pos, totalsize - pos);
+					//std::cout << "bytesread: " << bytesread << std::endl;
+					if (bytesread > 0) {
+						bok=true;
+						pos+=bytesread;
+					} else if (bytesread == 0) {
+						//std::cout << "EOF (fine dati)" << std::endl;
+						break;
+					} else if (errno == EAGAIN || errno == EWOULDBLOCK) {
+						//std::cout << "Nessun dato disponibile (EAGAIN), riprova..." << std::endl;
+						continue;
+					} else {
+						//std::cerr << "ERROR read(): " << strerror(errno) << std::endl;
+						break;
+					}
 				}
-			}
-			bytesread = read(fd, buffer+pos, totalsize-pos);
-			if (bytesread > 0) {
-				bok=true;
-				pos+=bytesread;
-			} else {
-				break;
+				if (bok){
+					//std::cout << "buffer: " << buffer << std::endl;
+					clipboardData->type=1; //TEXT
+					clipboardData->sizedata=0;
+					buffer = (char *)realloc(buffer, pos+1);
+					if (buffer) {
+						buffer[pos] = '\0';
+						size_t wchars_needed = mbstowcs(NULL, buffer, pos);
+						if (wchars_needed == (size_t)-1) {
+							std::cout << "ERROR: Conversion failed: " << std::endl;
+						}else{
+							clipboardData->data=(unsigned char*)malloc((wchars_needed) * sizeof(wchar_t));
+							mbstowcs((wchar_t*)clipboardData->data, buffer, wchars_needed);
+							clipboardData->sizedata=wchars_needed*sizeof(wchar_t);
+						}
+					}
+					free(buffer);
+				}
+				close(fd);
 			}
 		}
-		if (bok){
-			//std::cout << "buffer: " << buffer << std::endl;
-			clipboardData->type=1; //TEXT
-			clipboardData->sizedata=0;
-			buffer = (char *)realloc(buffer, pos+1);
-			if (buffer) {
-				buffer[pos] = '\0';
-				size_t wchars_needed = mbstowcs(NULL, buffer, pos);
-				if (wchars_needed == (size_t)-1) {
-					std::cout << "ERROR: Conversion failed: " << std::endl;
-				}else{
-					clipboardData->data=(unsigned char*)malloc((wchars_needed) * sizeof(wchar_t));
-					mbstowcs((wchar_t*)clipboardData->data, buffer, wchars_needed);
-					clipboardData->sizedata=wchars_needed*sizeof(wchar_t);
-				}
-			}
-			free(buffer);
-		}
-		close(fd);
 	}
 }
 
@@ -450,12 +475,12 @@ void dbusPermissionStart(){
     dbus_message_unref(msg);
 }
 
-void dbusNotifyPointerMotionAbsolute(DBusInput* i){
+void dbusNotifyPointerMotion(double x, double y){
 	DBusMessage* msg = dbus_message_new_method_call(
 		"org.freedesktop.portal.Desktop",
 		"/org/freedesktop/portal/desktop",
 		"org.freedesktop.portal.RemoteDesktop",
-		"NotifyPointerMotionAbsolute"
+		"NotifyPointerMotion"
 	);
 	DBusMessageIter iter1, outer1_array;
 	dbus_message_iter_init_append(msg, &iter1);
@@ -464,13 +489,75 @@ void dbusNotifyPointerMotionAbsolute(DBusInput* i){
 	dbus_message_iter_open_container(&iter1, DBUS_TYPE_ARRAY, "{sv}", &outer1_array);
 	dbus_message_iter_close_container(&iter1, &outer1_array);
 
-	dbus_message_iter_append_basic(&iter1, DBUS_TYPE_UINT32, &i->nodeid);
-	double dx=static_cast<double>(i->x);
-	dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &dx);
-	double dy=static_cast<double>(i->y);
-	dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &dy);
-	dbus_connection_send(dbusconn,msg,&i->rserial);
+	//double dx=static_cast<double>(x);
+	dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &x);
+	//double dy=static_cast<double>(y);
+	dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &y);
+	dbus_connection_send(dbusconn,msg,0);
 	dbus_message_unref(msg);
+}
+
+void dbusNotifyPointerMotionAbsolute(DBusInput* i){
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+	double x=i->x;
+	double fixX=0;
+	double y=i->y;
+	double fixY=0;
+	if ((i->FIXwidth>0) && (i->FIXheight>0)){
+		if (FIXcursorCount>10){
+			FIXcursorX=-1;
+			FIXcursorY=-1;
+		}
+		if ((FIXcursorX==-1) && (FIXcursorY==-1)){
+			if (x>i->FIXwidth-1){
+				fixX=x-(i->FIXwidth-1);
+				x=i->FIXwidth-1;
+			}
+			if (y>i->FIXheight-1){
+				fixY=y-(i->FIXheight-1);
+				y=i->FIXheight-1;
+			}
+			FIXcursorCount=0;
+		}else{
+			fixX=i->x-FIXcursorX;
+			x=-1;
+			fixY=i->y-FIXcursorY;
+			y=-1;
+			FIXcursorCount+=1;
+		}
+		FIXcursorX=i->x;
+		FIXcursorY=i->y;
+	}else{
+		FIXcursorX=-1;
+		FIXcursorY=-1;
+		FIXcursorCount=0;
+	}
+
+	if ((x>=0) && (y>=0)){
+		DBusMessage* msg = dbus_message_new_method_call(
+			"org.freedesktop.portal.Desktop",
+			"/org/freedesktop/portal/desktop",
+			"org.freedesktop.portal.RemoteDesktop",
+			"NotifyPointerMotionAbsolute"
+		);
+		DBusMessageIter iter1, outer1_array;
+		dbus_message_iter_init_append(msg, &iter1);
+		const char* dbushandleses_str1 = dbusrequest.session.c_str();
+		dbus_message_iter_append_basic(&iter1, DBUS_TYPE_OBJECT_PATH, &dbushandleses_str1);
+		dbus_message_iter_open_container(&iter1, DBUS_TYPE_ARRAY, "{sv}", &outer1_array);
+		dbus_message_iter_close_container(&iter1, &outer1_array);
+		dbus_message_iter_append_basic(&iter1, DBUS_TYPE_UINT32, &i->nodeid);
+		//double dx=static_cast<double>(x);
+		dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &x);
+		//double dy=static_cast<double>(y);
+		dbus_message_iter_append_basic(&iter1, DBUS_TYPE_DOUBLE, &y);
+		dbus_connection_send(dbusconn,msg,&i->rserial);
+		dbus_message_unref(msg);
+	}
+
+	if (fixX!=0 || fixY!=0){
+		dbusNotifyPointerMotion(fixX*i->FIXScaleFactorWidth,fixY*i->FIXScaleFactorHeight);
+	}
 }
 
 void dbusNotifyPointerButton(DBusInput* i){
@@ -703,6 +790,10 @@ void dbusHandleResponse(DBusConnection* connection, DBusMessage* msg) {
 								dbus_message_iter_next(&struct_iter);
 								dbus_message_iter_get_basic(&struct_iter, &curmonitor->height);
 
+								//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+								curmonitor->FIXwidth=curmonitor->width;
+								curmonitor->FIXheight=curmonitor->height;
+
 							} else {
 								baddmonitor=false;
 							}
@@ -907,6 +998,34 @@ void dbusAppendInputMouseMove(DBusMonitorInfo* m, double x, double y, useconds_t
 		i->nodeid=m->nodeid;
 		i->x=x;
 		i->y=y;
+		//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+		if (((m->FIXwidth<m->width) && (i->x>m->FIXwidth-1)) || ((m->FIXheight<m->height) && (i->y>m->FIXheight-1))){
+			i->FIXwidth=m->FIXwidth;
+			i->FIXScaleFactorWidth=(double)m->FIXwidth/(double)m->width;
+			i->FIXheight=m->FIXheight;
+			i->FIXScaleFactorHeight=(double)m->FIXheight/(double)m->height;
+		}else{
+			i->FIXwidth=0;
+			i->FIXScaleFactorWidth=0;
+			i->FIXheight=0;
+			i->FIXScaleFactorHeight=0;
+		}
+		/*
+		if ((m->FIXwidth<m->width) && (i->x>m->FIXwidth)){
+			i->FIXwidth=m->FIXwidth;
+			i->FIXScaleFactorWidth=(double)m->FIXwidth/(double)m->width;
+		}else{
+			i->FIXwidth=0;
+			i->FIXScaleFactorWidth=0;
+		}
+		if ((m->FIXheight<m->height) && (i->y>m->FIXheight)){
+			i->FIXheight=m->FIXheight;
+			i->FIXScaleFactorHeight=(double)m->FIXheight/(double)m->height;
+		}else{
+			i->FIXheight=0;
+			i->FIXScaleFactorHeight=0;
+		}
+		*/
 		i->vsleep=vsleep;
 		dbusinputs.push(i);
 	}
@@ -1153,7 +1272,9 @@ void onProcessFrame(void* userdata) {
 	DBusMonitorInfo* m = static_cast<DBusMonitorInfo*>(userdata);
 	pw_buffer* buf = pw_stream_dequeue_buffer(m->pwstream);
 	if (!buf) {
-        return;
+		pwerror="STREAM_DEQUEUE_BUFFER_ERROR";
+		pw_main_loop_quit(pwloop);
+		return;
     }
     tdlock.lock();
 	struct spa_buffer *spa_buf = buf->buffer;
@@ -1206,7 +1327,7 @@ void onProcessFrame(void* userdata) {
 						for (uint32_t y = 0; y < h; y++) {
 							for (uint32_t x = 0; x < w; x++) {
 								const uint32_t btsrc = y * bitmap->stride + x * 4;
-								const uint32_t btdst = (y * (w) + x) * 4;
+								const uint32_t btdst = (y * w + x) * 4;
 								if (palfa==1){
 									if (iformat==0){//ARGB
 										cursorData[btdst + 0] = src_data[btsrc + 1];
@@ -1300,34 +1421,40 @@ void onProcessFrame(void* userdata) {
 void onStateChanged(void* userdata, pw_stream_state old, pw_stream_state state, const char* error) {
 	//std::cout << "Status stream: " << pw_stream_state_as_string(state) << std::endl;
     if (state == PW_STREAM_STATE_ERROR) {
-        std::cerr << "Error stream: " << error << std::endl;
+    	pwerror="PW_STREAM_STATE_ERROR";
+    	pw_main_loop_quit(pwloop);
+    } else if (state == PW_STREAM_STATE_UNCONNECTED) {
+    	pwerror="PW_STREAM_STATE_UNCONNECTED";
+    	pw_main_loop_quit(pwloop);
+    } else if (state == PW_STREAM_STATE_PAUSED) {
+    	if (old == PW_STREAM_STATE_STREAMING) {
+    		pwerror="PW_STREAM_STATE_PAUSED";
+			pw_main_loop_quit(pwloop);
+    	}
     }
 }
 
-void onParamChanged(void *userData, uint32_t id, const struct spa_pod *param) {
+void onParamChanged(void *userdata, uint32_t id, const struct spa_pod *param) {
 	//TODO DETECT MONITORS CHANGES
-
-	/*
 	struct spa_video_info_raw info;
     if (id != SPA_PARAM_Format || param == NULL)
         return;
     if (spa_format_video_raw_parse(param, &info) < 0)
         return;
     //info.format; //SPA_VIDEO_FORMAT_BGRA SPA_VIDEO_FORMAT_BGRx SPA_VIDEO_FORMAT_RGBA
-    //info.size.width;
-    //info.size.height;
-    std::cerr << "onParamChanged: " << info.size.width << " " << info.size.height << std::endl;
-    */
+    //std::cerr << "onParamChanged: " << id << " - " << info.size.width << " " << info.size.height << std::endl;
+    DBusMonitorInfo* m = static_cast<DBusMonitorInfo*>(userdata);
+    m->width=info.size.width;
+    m->height=info.size.height;
 }
 
-
-static void onRegistryGlobal(void *data, uint32_t id,
+static void onRegistryGlobal(void *userdata, uint32_t id,
                                 uint32_t permissions, const char *type,
                                 uint32_t version, const struct spa_dict *props){
 	//TODO DETECT MONITORS CHANGES
 }
 
-void onRegistryGlobalRemove(void *data, uint32_t id){
+void onRegistryGlobalRemove(void *userdata, uint32_t id){
 	//TODO DETECT MONITORS CHANGES
 
 	/*
@@ -1408,33 +1535,31 @@ const struct pw_stream_events StreamEvents = {
     .process = onProcessFrame,
 };
 
-string startCapture(){
-	string sret="";
+void startCapture(){
+	pwerror="";
 	pw_init(NULL, NULL);
 	pwloop = pw_main_loop_new(NULL);
 	if (!pwloop) {
-		sret="Unable to create main loop.";
-		return sret;
+		pwerror="Unable to create main loop.";
+		return;
 	}
 	pw_context *pwcontext = pw_context_new(pw_main_loop_get_loop(pwloop), NULL, 0);
 	if (!pwcontext) {
-		sret="Unable to create PipeWire context.";
+		pwerror="Unable to create PipeWire context.";
 		pw_main_loop_destroy(pwloop);
-		return sret;
+		return;
 	}
 	pw_core *pwcore = pw_context_connect(pwcontext, NULL, 0);
 	if (!pwcore) {
-		sret="Unable to connect to PipeWire.";
+		pwerror="Unable to connect to PipeWire.";
 		pw_context_destroy(pwcontext);
 		pw_main_loop_destroy(pwloop);
-		return sret;
+		return;
 	}
-
 
 	pw_registry *pwregistry = pw_core_get_registry(pwcore, PW_VERSION_REGISTRY, 0);
 	spa_hook registryListener;
 	pw_registry_add_listener(pwregistry, &registryListener, &RegistryEvents, NULL);
-
 
 	uint32_t n_params=1;
 	if (dbusrequest.versionScreenCast>=2){
@@ -1442,6 +1567,7 @@ string startCapture(){
 			n_params++;
 		}
 	}
+
 	const spa_pod* params[n_params];
 	uint8_t spa_pod_builder_data[1024];
 	struct spa_pod_builder builder = SPA_POD_BUILDER_INIT(spa_pod_builder_data, sizeof(spa_pod_builder_data));
@@ -1455,8 +1581,6 @@ string startCapture(){
 			SPA_VIDEO_FORMAT_BGRA,
 			SPA_VIDEO_FORMAT_BGRA),
 		0));
-
-
 
 	if (dbusrequest.versionScreenCast>=2){
 		if (dbusrequest.availableCursorModesScreenCast & 4) {
@@ -1475,7 +1599,6 @@ string startCapture(){
 		 SPA_PARAM_META_size, SPA_POD_Int(sizeof(struct spa_meta_header))));
 	*/
 
-
 	for (size_t i = 0; i < dbusmonitors.size(); i++) {
 		DBusMonitorInfo* m = dbusmonitors[i];
 		std::string nmstream = "dwagent-capture-" + std::to_string(m->nodeid);
@@ -1486,12 +1609,12 @@ string startCapture(){
 									PW_KEY_MEDIA_ROLE, "Screen",
 									NULL));
 		if (!m->pwstream) {
-			sret="Unable to create stream.";
+			pwerror="Unable to create stream.";
 			pwStreamDestroyMonitors();
 			pw_core_disconnect(pwcore);
 			pw_context_destroy(pwcontext);
 			pw_main_loop_destroy(pwloop);
-			return sret;
+			return;
 		}
 		pw_stream_add_listener(m->pwstream, &m->streamlistener, &StreamEvents, m);
 		int iret = pw_stream_connect(
@@ -1506,12 +1629,12 @@ string startCapture(){
 			n_params
 		);
 		if (iret < 0) {
-			sret="Unable to connect to stream: " + to_string(iret) + ".";
+			pwerror="Unable to connect to stream: " + to_string(iret) + ".";
 			pwStreamDestroyMonitors();
 			pw_core_disconnect(pwcore);
 			pw_context_destroy(pwcontext);
 			pw_main_loop_destroy(pwloop);
-			return sret;
+			return;
 		}
 	}
 
@@ -1524,39 +1647,77 @@ string startCapture(){
 	pw_core_disconnect(pwcore);
 	pw_context_destroy(pwcontext);
 	pw_main_loop_destroy(pwloop);
-	return sret;
+}
+
+bool isCaptureErrorRetry(const std::string& str) {
+	return (
+			((str.find("DBus") != string::npos) && (str.find("Error") != string::npos) && (str.find("AccessDenied") != string::npos)) ||
+			((str.find("DBus") != string::npos) && (str.find("Error") != string::npos) && (str.find("InvalidArgs") != string::npos) && (str.find("RemoteDesktop") != string::npos)) || //DEBIAN LOGIN MANAGER
+			(str=="PW_STREAM_STATE_ERROR" || str=="PW_STREAM_STATE_UNCONNECTED" || str=="PW_STREAM_STATE_PAUSED" || str=="STREAM_DEQUEUE_BUFFER_ERROR")
+		);
 }
 
 void *captureThread(void *arg) {
 	//std::cerr << "Start captureThread" << std::endl;
+	bool bretrycap=false;
+	struct timeval tmretrycap;
+	struct timeval tmretrycapnow;
+	useconds_t elapsedretrycap;
 	while (true){
 		int st=tdstatusGet();
-		if ((st==STATUS_ERROR) || (st==STATUS_EXIT)){
+		if (st==STATUS_EXIT){
 			break;
-		}else if (st==STATUS_NONE){
-			tdstatusSet(STATUS_PERMISSION);
-			string sret=dbusAddRequestAndWait("permission",NULL);
-			if (sret==""){
-				sret=startCapture();
-				tdlock.lock();
-				dbusClearMonitorNotSync();
-				if (tdstatus!=STATUS_EXIT){
-					if (sret==""){
-						tdstatus=STATUS_NONE;
-					}else{
-						tdstatus=STATUS_ERROR;
-						tderror=sret;
+		}else if (st==STATUS_ERROR){
+			usleep(250000);
+		}else{
+			if (bretrycap==true){
+				gettimeofday(&tmretrycapnow, NULL);
+				elapsedretrycap = (tmretrycapnow.tv_sec - tmretrycap.tv_sec) * 1000000 + (tmretrycapnow.tv_usec - tmretrycap.tv_usec);
+				if ((elapsedretrycap<0) || (elapsedretrycap>=5000000)){ //5 seconds
+					bretrycap=false;
+					tdstatusSet(STATUS_NONE);
+				}else{
+					usleep(250000);
+				}
+			}
+			if (bretrycap==false){
+				bretrycap=true;
+				gettimeofday(&tmretrycap, NULL);
+				tdstatusSet(STATUS_PERMISSION);
+				string sret=dbusAddRequestAndWait("permission",NULL);
+				if (sret==""){
+					startCapture();
+					tdlock.lock();
+					dbusClearMonitorNotSync();
+					if (tdstatus!=STATUS_EXIT){
+						if (pwerror==""){
+							tdstatus=STATUS_NONE;
+							tderror="";
+						}else{
+							if (isCaptureErrorRetry(pwerror)){
+								tdstatus=STATUS_NONE;
+								tderror="";
+							}else{
+								tdstatus=STATUS_ERROR;
+								tderror=pwerror;
+							}
+						}
 					}
+					tdlock.unlock();
+				}else{
+					tdlock.lock();
+					dbusClearMonitorNotSync();
+					if (tdstatus!=STATUS_EXIT){
+						if (isCaptureErrorRetry(sret)){
+							tdstatus=STATUS_NONE;
+							tderror="";
+						}else{
+							tdstatus=STATUS_ERROR;
+							tderror=sret;
+						}
+					}
+					tdlock.unlock();
 				}
-				tdlock.unlock();
-			}else{
-				tdlock.lock();
-				dbusClearMonitorNotSync();
-				if (tdstatus!=STATUS_EXIT){
-					tdstatus=STATUS_ERROR;
-					tderror=sret;
-				}
-				tdlock.unlock();
 			}
 		}
 	}
@@ -1583,6 +1744,9 @@ void DWAScreenCaptureSetPermissionToken(char* bf, int sz){
 		dbusrequest.restoreToken=string(bf, sz);
 	}else{
 		dbusrequest.restoreToken="";
+		if (tdstatus == STATUS_ERROR){
+			tdstatus = STATUS_NONE;
+		}
 	}
 	tdlock.unlock();
 }
@@ -1596,6 +1760,11 @@ void DWAScreenCaptureFreeMemory(void* pnt){
 }
 
 int DWAScreenCaptureIsChanged(){
+	if (tdstarted==false){
+		tdstarted=true;
+		pthread_create(&tddbus, NULL, dbusThread, NULL);
+		pthread_create(&tdcapture, NULL, captureThread, NULL);
+	}
 	int iret=0;
 	tdlock.lock();
 	int st=tdstatus;
@@ -1606,6 +1775,9 @@ int DWAScreenCaptureIsChanged(){
 		monchanged=false;
 		iret=1;
 	}
+	if (st == STATUS_ERROR){
+		tdlasterror=tderror;
+	}
 	tdlock.unlock();
 	if (iret==3){
 		return 3;
@@ -1614,16 +1786,16 @@ int DWAScreenCaptureIsChanged(){
 	}else if (st == STATUS_ERROR){
 		return 4;
 	}
-	return 2;
+	return 2; //PERMISSION
 }
 
 int DWAScreenCaptureErrorMessage(char* bf, int sz){
-	int iret=tderror.length();
+	int iret=tdlasterror.length();
 	if (iret>0){
 		if (iret>sz){
 			iret=sz;
 		}
-		strncpy(bf, tderror.c_str(), iret);
+		strncpy(bf, tdlasterror.c_str(), iret);
 	}
 	return iret;
 }
@@ -2020,6 +2192,11 @@ bool DWAScreenCaptureLoad() {
 	mousebtn1Down=0;
 	mousebtn2Down=0;
 	mousebtn3Down=0;
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+	FIXcursorX=-1;
+	FIXcursorY=-1;
+	FIXcursorCount=0;
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
 	cursorX=0;
 	cursorY=0;
 	cursorHotspotX=0;
@@ -2049,8 +2226,7 @@ bool DWAScreenCaptureLoad() {
 	cpuUsage=new LinuxCPUUsage();
 	tdstatusSet(STATUS_NONE);
 	monchanged=false;
-	pthread_create(&tddbus, NULL, dbusThread, NULL);
-	pthread_create(&tdcapture, NULL, captureThread, NULL);
+	tdstarted=false;
 	return true;
 }
 
@@ -2060,11 +2236,15 @@ void DWAScreenCaptureUnload() {
 	if (curst==STATUS_CAPTURE){
 		pw_main_loop_quit(pwloop);
 	}
-	tdjoinwait(tdcapture,5);
+	if (tdstarted==true){
+		tdjoinwait(tdcapture,5);
+	}
 	delete cpuUsage;
-
 	dbusclose=true;
-	tdjoinwait(tddbus,5);
+	if (tdstarted==true){
+		tdjoinwait(tddbus,5);
+	}
+	tdstarted=false;
 	if (dbusconn != NULL) {
 		dbus_connection_unref(dbusconn);
 		dbusconn = NULL;

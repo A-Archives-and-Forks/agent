@@ -70,9 +70,8 @@ MacCPUUsage* cpuUsage;
 MacInputs* macInputs;
 bool curdef;
 void* curoref;
-
 bool reqperm;
-
+long clipboardChangeCount;
 IOPMAssertionID assertionIDIOPM1;
 IOReturn successIOPM1;
 IOPMAssertionID assertionIDIOPM2;

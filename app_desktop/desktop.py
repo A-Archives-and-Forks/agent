@@ -117,7 +117,8 @@ class Desktop():
             return dm;
         else:
             raise Exception("Permission denied. Invalid id.")
-        
+    
+    #TO REMOVE 2026 01 19
     def req_copy_text(self,cinfo,params):
         sid = agent.get_prop(params,"id", "")
         dm=self._get_desktop_manager_check_permissions(cinfo,sid)
@@ -125,6 +126,7 @@ class Desktop():
         sret["text"]=dm.copy_text();
         return json.dumps(sret)
     
+    #TO REMOVE 2026 01 19
     def req_paste_text(self,cinfo,params):
         sret=""
         sid = agent.get_prop(params,"id", "")
@@ -133,14 +135,9 @@ class Desktop():
         dm.paste_text(s);
         return sret
     
-    def req_set_clipboard(self,cinfo,params):
-        sret=""
-        sid = agent.get_prop(params,"id", "")
-        t = agent.get_prop(params,"type", "")
-        d = agent.get_prop(params,"data", "")
-        dm=self._get_desktop_manager_check_permissions(cinfo,sid)
-        dm.set_clipboard(t, d);
-        return sret
+    #2026 02 16 #DUMMY method to wait load app and library (to move on agent core) -> DONE REMOVE ALSO FROM desktop.js
+    def req_waitload(self,cinfo,params):
+        return ""
     
     def req_websocket(self, cinfo, wsock):
         self._add_desktop_manager(cinfo, wsock)        
@@ -163,9 +160,7 @@ class DesktopProcessCapture(threading.Thread):
         self._process_init=False
         self._process_status="stopped"
         self._process_last_error=None
-        self._last_clipboard={"id":0,"type":0}
-        self._last_clipboard_cnt=0
-        self._last_clipboard_partial=None
+        self._current_clipboard={"id":0,"type":0,"size":0}        
         self._id=0        
         self._monitors=None 
         self._monitorsid=0       
@@ -216,8 +211,8 @@ class DesktopProcessCapture(threading.Thread):
     def get_last_error(self):
         return self._process_last_error;
     
-    def get_last_clipboard(self):
-        return self._last_clipboard
+    def get_current_clipboard(self):
+        return self._current_clipboard        
     
     def _init_screen_module(self):
         if self._screen_module is None:
@@ -409,14 +404,7 @@ class DesktopProcessCapture(threading.Thread):
                             if bwrite:
                                 self._write_obj({u"request":u"INIT_SOUND_CAPTURE",u"cond":self._sound_status["cond"],u"memmap":self._sound_status["memmap"]})
                         elif sreq==u"CLIPBOARD_CHANGED":
-                            if jo["tokenpos"]==0:
-                                self._last_clipboard_partial={"type":jo["type"], "size":jo["size"], "tokens":[]}
-                            self._last_clipboard_partial["tokens"].append(jo["tokendata"])
-                            if jo["tokenlast"]:
-                                self._last_clipboard_cnt+=1
-                                self._last_clipboard_partial["id"]=self._last_clipboard_cnt
-                                self._last_clipboard=self._last_clipboard_partial
-                                self._last_clipboard_partial=None                            
+                            self._current_clipboard=jo                            
                         elif sreq==u"RAISE_ERROR":
                             if "capture_fallback_lib" in jo:
                                 self._agent_main._app_desktop_capture_fallback_lib=jo["capture_fallback_lib"]
@@ -470,16 +458,18 @@ class DesktopProcessCapture(threading.Thread):
         if bok: 
             self._write_obj({u"request":u"INPUTS",u"monitor":mon,u"inputs":sinps})
     
+    def set_clipboard(self, mon, stp, sdt):
+        self._write_obj({u"request":u"SET_CLIPBOARD",u"monitor":mon, u"type": stp, u"data": sdt})
+        
+    #TO REMOVE 2026 01 19
     def copy_text(self, mon):
         self._write_obj({u"request":u"COPY_TEXT",u"monitor":mon})
-            
+        
+    #TO REMOVE 2026 01 19
     def paste_text(self, mon, stxt):
         self._write_obj({u"request":u"PASTE_TEXT",u"monitor":mon, u"text": stxt})
             
-    def set_clipboard(self, mon, stp, sdt):
-        self._write_obj({u"request":u"SET_CLIPBOARD",u"monitor":mon, u"type": stp, u"data": sdt})
-
-
+    
 class DesktopSessionStatsCalculator():
     
     def __init__(self, chk, rsl):
@@ -543,7 +533,8 @@ class DesktopSession(threading.Thread):
         self._struct_hh=struct.Struct("!hh")
         self._struct_hb=struct.Struct("!hb")
         self._struct_Q=struct.Struct("!Q")
-        self._struct_cpltkc=struct.Struct("!hhqi")
+        self._struct_clpsnd=struct.Struct("!hqhqi")
+        self._struct_clprcv=struct.Struct("!hqi")
         self._dskmain=dskmain
         self._process=self._dskmain._process
         self._cinfo=cinfo
@@ -573,8 +564,6 @@ class DesktopSession(threading.Thread):
         self._websocket=wsock
         self._keepalive_counter = None
         self._keepalive_send = False        
-        self._websocket.accept(10,{"on_close": self._on_websocket_close,"on_data":self._on_websocket_data})
-        self._websocket_send_lock = threading.RLock()
         self._cursor_visible = True
         self._supported_frame=None
         self._process_id=-1        
@@ -588,7 +577,6 @@ class DesktopSession(threading.Thread):
         self._audio_type=-1
         self._audio_type_to_send=False
         self._audio_enable=True
-        self._clipboard_auto=False
         self._slow_mode=False
         self._slow_mode_counter=utils.Counter()
         self._ping=0
@@ -632,11 +620,18 @@ class DesktopSession(threading.Thread):
         self._init_err_msg=None
         self._debug_forcesubprocess=False
         self._process_clipboard_thread=None
-        self._last_clipboard_id=-1
+        self._get_clipboard_data=None
+        self._set_clipboard_data=None
+        self._set_clipboard_data_tokens=None
+        self._set_clipboard_data_size=None
+        self._clipboard_data_condition=threading.Condition()
+        self._clipboard_data_run=True
         try:
             self._debug_forcesubprocess=self._dskmain._agent_main.get_config("desktop.debug_forcesubprocess",False)
         except:
             None
+        self._websocket_send_lock = threading.RLock()
+        self._websocket.accept(10,{"on_close": self._on_websocket_close,"on_data":self._on_websocket_data})                
             
     def get_id(self):
         return self._id
@@ -717,8 +712,30 @@ class DesktopSession(threading.Thread):
                         self._send_stats_thread.start()                    
                     elif not b and self._send_stats_thread is not None:
                         self._send_stats_thread=None
-                if prprequest is not None and "clipboardAuto" in prprequest:
-                    self._clipboard_auto=prprequest["clipboardAuto"]=="true"
+                if prprequest is not None and "getClipboardData" in prprequest:
+                    self._clipboard_data_condition.acquire()
+                    try:
+                        self._get_clipboard_data=prprequest["getClipboardData"]
+                        self._clipboard_data_condition.notify_all()
+                    finally:
+                        self._clipboard_data_condition.release()
+                if prprequest is not None and "setClipboardData" in prprequest:
+                    idx=prprequest["setClipboardData"]
+                    if idx==0:
+                        self._set_clipboard_data_tokens=[]
+                        self._set_clipboard_data_size=0
+                    self._set_clipboard_data_tokens.append(prprequest["token"])
+                    self._set_clipboard_data_size+=len(prprequest["token"])
+                    if self._set_clipboard_data_size>=prprequest["size"]:
+                        self._process.set_clipboard(self._monitor, prprequest["type"], "".join(self._set_clipboard_data_tokens))
+                        self._set_clipboard_data_tokens=None
+                        self._set_clipboard_data_size=0
+                    self._clipboard_data_condition.acquire()
+                    try:
+                        self._set_clipboard_data=idx
+                        self._clipboard_data_condition.notify_all()
+                    finally:
+                        self._clipboard_data_condition.release()
             except:
                 ex = utils.get_exception()
                 if self._process.get_status()=="started":
@@ -736,7 +753,7 @@ class DesktopSession(threading.Thread):
             self._websocket.send_bytes(bts)
     
     def check_destroy(self):
-        if self._init_counter is not None and self._init_counter.is_elapsed(15):
+        if self._init_counter is not None and self._init_counter.is_elapsed(15.0):
             if self._process.get_status()=="started":
                 self._init_err_msg = "Session not started."
             else:
@@ -790,7 +807,7 @@ class DesktopSession(threading.Thread):
         #SEND ID        
         sdataid=self._struct_h.pack(common.TOKEN_SESSION_ID)+utils.str_to_bytes(self._id)
         self._send_bytes(sdataid)
-    
+        
         #START KEEP ALIVE MANAGER
         self._send_bytes(self._struct_h.pack(common.TOKEN_SESSION_ALIVE))
         
@@ -861,7 +878,7 @@ class DesktopSession(threading.Thread):
                 break
             self._init_counter=None
             if len(sdata)>0:
-                tp = self._struct_h.unpack(sdata[0:2])[0]                
+                tp = self._struct_h.unpack(sdata[0:2])[0]
                 if tp==common.TOKEN_FRAME:
                     #SEND PING
                     if self._ping_check==False and (self._ping_counter is None or self._ping_counter.is_elapsed(5)) and self._stats_cur_frame_size==0 and self._stats_frame_sent_time==self._stats_frame_received_time:
@@ -1001,20 +1018,46 @@ class DesktopSession(threading.Thread):
             self._quality_detect_up_check.reset()
     
     def _process_clipboard_handler(self):
-        while self._last_clipboard_id>=0:
-            last_clipboard=self._process.get_last_clipboard()
-            if last_clipboard["id"]!=self._last_clipboard_id:
-                self._last_clipboard_id=last_clipboard["id"]
-                
-                tks=last_clipboard["tokens"]
-                for i in range(len(tks)):
-                    self._send_bytes(self._struct_cpltkc.pack(common.TOKEN_CLIPBOARD,last_clipboard["type"],last_clipboard["size"],i) + tks[i])
-            else:
-                time.sleep(0.25)
-    
+        curclp=None
+        curclptks=None
+        while self._clipboard_data_run:
+            btsend=None
+            self._clipboard_data_condition.acquire()
+            try:
+                if self._set_clipboard_data is not None:
+                    btsend=self._struct_clprcv.pack(common.TOKEN_CLIPBOARD_RECEIVED,0,self._set_clipboard_data)
+                    self._set_clipboard_data=None
+                elif self._get_clipboard_data is not None:
+                    if curclp is None:
+                        curclp=self._process.get_current_clipboard()
+                        if curclp["size"]==0:
+                            btsend=self._struct_clpsnd.pack(common.TOKEN_CLIPBOARD_SEND,curclp["id"],curclp["type"],curclp["size"],0)
+                            curclp=None
+                            self._get_clipboard_data=None
+                        else:
+                            dt=curclp["data"]
+                            maxsz=32*1024
+                            curclptks=[]
+                            for i in range(0, len(dt), maxsz):
+                                curclptks.append(dt[i:i + maxsz])
+                    if curclp is not None:
+                        if self._get_clipboard_data<=len(curclptks)-1:
+                            btsend=self._struct_clpsnd.pack(common.TOKEN_CLIPBOARD_SEND,curclp["id"],curclp["type"],curclp["size"],self._get_clipboard_data) + curclptks[self._get_clipboard_data]
+                            if self._get_clipboard_data==len(curclptks)-1:
+                                curclp=None
+                            self._get_clipboard_data=None
+                        else:
+                            curclp=None
+                else:
+                    self._clipboard_data_condition.wait(1.0)
+            finally:
+                self._clipboard_data_condition.release()
+            if btsend is not None:
+                self._send_bytes(btsend)            
+            
     def _destroy_clipboard_handler(self):
         if self._process_clipboard_thread!=None:
-            self._last_clipboard_id=-1
+            self._clipboard_data_run=False
             self._process_clipboard_thread.join(2)
             self._process_clipboard_thread=None             
       
@@ -1028,7 +1071,7 @@ class DesktopSession(threading.Thread):
         try:
             while self.check_destroy():
                 
-                if self._process.get_status()=="started":                    
+                if self._process.get_status()=="started":
                     if self._process.get_id()!=self._process_id:
                         self._destroy_process_encoder()
                         self._process_id=self._process.get_id()
@@ -1044,13 +1087,9 @@ class DesktopSession(threading.Thread):
                         self._process_encoder_read_thread=threading.Thread(target=self._process_encoder_read, args=(self._process_id,), name="DesktopSessionProcessRead" + utils.str_new(self._id))
                         self._process_encoder_read_thread.start()
                     
-                    if self._clipboard_auto==True:
-                        if self._process_clipboard_thread==None:
-                            self._last_clipboard_id=self._process.get_last_clipboard()["id"]
-                            self._process_clipboard_thread=threading.Thread(target=self._process_clipboard_handler, name="DesktopSessionClipboardHandler" + utils.str_new(self._id))
-                            self._process_clipboard_thread.start() 
-                    else:
-                        self._destroy_clipboard_handler()
+                    if self._process_clipboard_thread==None:
+                        self._process_clipboard_thread=threading.Thread(target=self._process_clipboard_handler, name="DesktopSessionClipboardHandler" + utils.str_new(self._id))
+                        self._process_clipboard_thread.start() 
                     
                     monitors=self._process.get_monitors()
                     if monitors is None:
@@ -1164,37 +1203,27 @@ class DesktopSession(threading.Thread):
         
         self._dskmain._rem_desktop_manager(self._id)
         self._id=None        
-        
+    
+    #TO REMOVE 2026 01 19
     def copy_text(self):
         if not self._allow_inputs:
             raise Exception("Permission denied (inputs).")
-        if self._clipboard_auto:
-            raise Exception("Auto clipboard enabled.")
-            
-        lid = self._process.get_last_clipboard()["id"];
+        
         self._process.copy_text(self._monitor)
-        cnt = utils.Counter()
-        while True:
-            apps = self._process.get_last_clipboard()
-            if lid!=apps["id"]:
-                bts = utils.bytes_join(apps["tokens"])
-                return utils.bytes_to_str(bts,"utf8")
-            time.sleep(0.5)
-            if self.is_destroy() or cnt.is_elapsed(5):
-                return ""
+        time.sleep(0.5)
+        curclp=self._process.get_current_clipboard()
+        if curclp["size"]==0:
+            return ""
+        else:
+            return utils.bytes_to_str(curclp["data"],"utf8")
     
+    #TO REMOVE 2026 01 19
     def paste_text(self,s):
         if not self._allow_inputs:
             raise Exception("Permission denied (inputs).")
         if s is not None:
             self._process.paste_text(self._monitor,s)
             
-    def set_clipboard(self,t,d):
-        if not self._allow_inputs:
-            raise Exception("Permission denied (inputs).")
-        if t is not None and d is not None:
-            self._process.set_clipboard(self._monitor,t,d)
-    
     def destroy(self):
         self._send_stats_thread=None
         self._bdestroy=True             

@@ -73,12 +73,21 @@ int xfixesevent;
 
 Window fakewindow;
 Atom atomStrTp;
+Atom atomStrIncr;
 Atom atomClipboard;
 Atom atomXSelData;
 Atom atomTargets;
 Atom atomText;
+bool incractiveget;
+bool incractiveset;
+int incroffset;
+XWindowAttributes incrwa;
+Window incrrequestor;
+Atom incrproperty;
+Atom incrtarget;
+string copytxtincr;
 wstring copytxt;
-bool copyok;
+string pastetxtincr;
 wstring pastetxt;
 
 bool clipboardChanges;

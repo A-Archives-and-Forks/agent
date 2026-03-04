@@ -8,7 +8,7 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 #include "screencapturenativekit.h"
 
 int DWAScreenCaptureVersion(){
-	return 1;
+	return 2;
 }
 
 void DWAScreenCaptureFreeMemory(void* pnt){

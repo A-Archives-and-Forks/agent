@@ -56,7 +56,6 @@ class ProcessCaptureScreen(threading.Thread):
         self._inputs_lock=threading.Lock()
         self._privacy_mode=False
         self._clipboard_data=common.CLIPBOARD_DATA()
-        self._clipboard_to_send=None
         self._clipboard_hash=""
     
     def _load_screen_module(self):
@@ -212,11 +211,12 @@ class ProcessCaptureScreen(threading.Thread):
                             self._screen_module.DWAScreenCaptureFreeMemory(pi)
                         if apps is None:
                             apps = u""
-                        self._clipboard_to_send = {}
-                        self._clipboard_to_send["type"] = 1 #TEXT
-                        self._clipboard_to_send["data"] = utils.str_to_bytes(apps,"utf8")
-                        self._clipboard_to_send["sizedata"] = len(self._clipboard_to_send["data"])
-                        self._clipboard_to_send["posdata"] = 0
+                        req={u"request": u"CLIPBOARD_CHANGED"}
+                        req["id"]=0
+                        req["type"]=self._clipboard_data.type
+                        req["data"]=utils.str_to_bytes(apps,"utf8")
+                        req["size"]=len(req["data"])
+                        self._process.write_obj(req)
                 elif prms[0]==u"PASTE":
                     stxt=ips[i][6:]
                     if self._screen_libver>=2:
@@ -435,39 +435,20 @@ class ProcessCaptureScreen(threading.Thread):
             if self._clipboard_data.type==1: #TEXT
                 cvdt = ctypes.c_void_p(self._clipboard_data.data)
                 apps = ctypes.wstring_at(cvdt,size=int(self._clipboard_data.sizedata/ctypes.sizeof(ctypes.c_wchar)))
-                self._screen_module.DWAScreenCaptureFreeMemory(cvdt)                
+                self._screen_module.DWAScreenCaptureFreeMemory(cvdt)
                 clphs=hashlib.sha512(utils.str_to_bytes(u":".join([u"1",apps]),"utf8")).hexdigest()
                 if self._clipboard_hash!=clphs:
-                    self._clipboard_hash=clphs                                                    
-                    self._clipboard_to_send = {}
-                    self._clipboard_to_send["type"] = self._clipboard_data.type
-                    self._clipboard_to_send["data"] = utils.str_to_bytes(apps,"utf8")
-                    self._clipboard_to_send["sizedata"] = len(self._clipboard_to_send["data"])
-                    self._clipboard_to_send["posdata"] = 0
-            
-        if self._clipboard_to_send is not None:
-            sizedata=self._clipboard_to_send["sizedata"]
-            posdata=self._clipboard_to_send["posdata"]
-            tosenddata=sizedata-posdata
-            req={u"request": u"CLIPBOARD_CHANGED"}
-            req["type"]=self._clipboard_to_send["type"]
-            req["size"]=self._clipboard_to_send["sizedata"]
-            req["tokenpos"]=posdata            
-            if tosenddata<=common.MAX_CLIPBOARD_TOKEN_SIZE:
-                req["tokensize"]=tosenddata
-                req["tokendata"]=self._clipboard_to_send["data"][posdata:posdata+tosenddata]
-                req["tokenlast"]=True
-                self._process.write_obj(req)
-                self._clipboard_to_send=None
-            else:
-                req["tokensize"]=common.MAX_CLIPBOARD_TOKEN_SIZE                
-                req["tokendata"]=self._clipboard_to_send["data"][posdata:posdata+common.MAX_CLIPBOARD_TOKEN_SIZE]
-                req["tokenlast"]=False
-                self._process.write_obj(req)
-                self._clipboard_to_send["posdata"]=posdata+common.MAX_CLIPBOARD_TOKEN_SIZE
-    
+                    self._clipboard_hash=clphs                    
+                    req={u"request": u"CLIPBOARD_CHANGED"}
+                    req["id"]=0
+                    req["type"]=self._clipboard_data.type
+                    req["data"]=utils.str_to_bytes(apps,"utf8")
+                    req["size"]=len(req["data"])
+                    self._process.write_obj(req)
+                        
+                    
     def _read_perm_token_json(self):
-        jo=None
+        jo={}
         fnptoken = utils.path_expanduser("~") + utils.path_sep + u".dwagent"
         if not utils.path_exists(fnptoken):
             return jo
@@ -487,7 +468,7 @@ class ProcessCaptureScreen(threading.Thread):
         jo=self._read_perm_token_json()
         pth=utils.os_getcwd()
         if pth in jo:
-            ptoken=utils.enc_base64_decode(jo[pth])
+            ptoken=utils.enc_base64_decode(jo[pth])            
         return ptoken
                 
     def _write_perm_token(self,ptoken):
@@ -499,35 +480,43 @@ class ProcessCaptureScreen(threading.Thread):
         if jo is None:
             jo={}
         pth=utils.os_getcwd()
-        jo[pth]=utils.bytes_to_str(utils.enc_base64_encode(ptoken),"utf8")
-        fnptoken = utils.path_expanduser("~") + utils.path_sep + u".dwagent"
-        if not utils.path_exists(fnptoken):
-            utils.path_makedirs(fnptoken)
-        fnptoken = fnptoken + utils.path_sep + u"app_desktop.ptoken"
-        f=utils.file_open(fnptoken , 'wb')
-        try:
-            bt=utils.str_to_bytes(json.dumps(jo),"utf8")
-            f.write(utils.enc_base64_encode(utils.zlib_compress(bt)))
-        finally:
-            f.close()        
+        if ptoken is not None:
+            bwrite=True
+            jo[pth]=utils.bytes_to_str(utils.enc_base64_encode(ptoken),"utf8")
+        else:
+            if pth in jo:
+                bwrite=True
+                del jo[pth]
+            else:
+                bwrite=False
+        if bwrite:
+            fnptoken = utils.path_expanduser("~") + utils.path_sep + u".dwagent"
+            if not utils.path_exists(fnptoken):
+                utils.path_makedirs(fnptoken)
+            fnptoken = fnptoken + utils.path_sep + u"app_desktop.ptoken"
+            f=utils.file_open(fnptoken , 'wb')
+            try:
+                bt=utils.str_to_bytes(json.dumps(jo),"utf8")
+                f.write(utils.enc_base64_encode(utils.zlib_compress(bt)))
+            finally:
+                f.close()        
         
     def run(self):
         first_time=True
         detect_monitors_zero_cnt = None
         detect_monitors_cnt = None        
-        try:            
-            self._load_screen_module()
+        try:
+            self._load_screen_module()         
+            #Set Permission Token:
             if self._screen_libver>=3:
-                #Set Permission Token:
-                tokenbf=None
                 try:
                     tokenbf=self._read_perm_token()
                 except:
-                    None
+                    tokenbf=None
                 if tokenbf is not None:
                     tokensz = len(tokenbf)
                     self._screen_module.DWAScreenCaptureSetPermissionToken(ctypes.create_string_buffer(tokenbf,tokensz), tokensz)
-            
+                        
             while not self._bdestroy and not self._process.is_destroy():
                 forceChanges = False
                 iretchanged = self._screen_module.DWAScreenCaptureIsChanged()
@@ -562,9 +551,15 @@ class ProcessCaptureScreen(threading.Thread):
                         if l>0:
                             try:
                                 sodn=utils.bytes_to_str(bf.value[0:l],"utf8")
+                                if sodn=="#PermissionRejected" and tokenbf is not None:
+                                    tokenbf=None
+                                    self._write_perm_token(tokenbf)
+                                    self._screen_module.DWAScreenCaptureSetPermissionToken(None, 0)
+                                    sodn=None
                             except:
-                                None                        
-                    raise Exception(sodn)
+                                None
+                    if sodn is not None:
+                        raise Exception(sodn)
                 
                 if self._capture_allowed!=cptallow:
                     self._capture_allowed=cptallow
@@ -912,7 +907,7 @@ class ProcessCapture(ipc.ChildProcessThread):
     
     def run(self):
         try:
-            c = agent.read_config_file()            
+            c = agent._read_config_file()            
             if "debug_mode" in c:
                 self._debug_enable=c["debug_mode"]
             if "desktop.sound_enable" in c:

@@ -31,6 +31,8 @@ using namespace std;
 #include <mutex>
 #include <condition_variable>
 #include <queue>
+#include <poll.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <X11/keysym.h>
@@ -42,6 +44,10 @@ struct DBusMonitorInfo {
     const char* id;
     int x, y;
     int width, height;
+    //FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+    int FIXwidth;
+	int FIXheight;
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
     pw_stream *pwstream;
     spa_hook streamlistener;
     unsigned char *lastFrameData;
@@ -87,6 +93,12 @@ struct DBusInput{
 	uint32_t nodeid;
 	double x;
 	double y;
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+	double FIXwidth;
+	double FIXheight;
+	double FIXScaleFactorWidth;
+	double FIXScaleFactorHeight;
+	//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
 	int32_t button;
 	uint32_t state;
 	uint32_t axis;
@@ -108,11 +120,13 @@ struct ScreenCaptureInfo{
 	RGB_IMAGE* rgbimage;
 };
 
+bool tdstarted;
 pthread_t tdcapture;
 pthread_t tddbus;
 int tdstatus;
 bool monchanged;
 string tderror;
+string tdlasterror;
 mutex tdlock;
 condition_variable tdcondvar;
 
@@ -121,7 +135,9 @@ DBusRequest dbusrequest;
 DBusClipboard dbusclipboard;
 atomic<bool> dbusclose(false);
 
-pw_main_loop* pwloop = nullptr;
+
+pw_main_loop* pwloop = NULL;
+string pwerror;
 LinuxCPUUsage* cpuUsage;
 
 bool ctrlDown;
@@ -134,6 +150,12 @@ int32_t mousebtn3Code;
 uint32_t mousebtn1Down;
 uint32_t mousebtn2Down;
 uint32_t mousebtn3Down;
+
+//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
+double FIXcursorX;
+double FIXcursorY;
+int FIXcursorCount;
+//FIX NotifyPointerMotionAbsolute does not work when scaling is enable
 
 int cursorX;
 int cursorY;

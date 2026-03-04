@@ -203,46 +203,46 @@ void MacInputs::mouse(int x, int y, int button, int wheel, bool ctrl, bool alt, 
 	}else{
 		bool moveonly=true;
 		if (button!=-1) {
-			int appbtn=-1;
+			CGEventType appbtn1=kCGEventNull;
 			if ((button & 1) && (!mousebtn1Down)){
-				appbtn=kCGEventLeftMouseDown;
+				appbtn1=kCGEventLeftMouseDown;
 				mousebtn1Down=true;
 			}else if (mousebtn1Down){
-				appbtn=kCGEventLeftMouseUp;
+				appbtn1=kCGEventLeftMouseUp;
 				mousebtn1Down=false;
 			}
-			if (appbtn!=-1){
+			if (appbtn1!=kCGEventNull){
 				moveonly=false;
-				CGEventRef theEvent = CGEventCreateMouseEvent(NULL,appbtn,cmp,kCGMouseButtonLeft);
+				CGEventRef theEvent = CGEventCreateMouseEvent(NULL,appbtn1,cmp,kCGMouseButtonLeft);
 				CGEventSetFlags(theEvent, (CGEventFlags)getModifiers(ctrl,alt,shift,command));
 				CGEventPost(kCGHIDEventTap, theEvent);
 				CFRelease(theEvent);
 			}
-			appbtn=-1;
+			CGEventType appbtn2=kCGEventNull;
 			if ((button & 2) && (!mousebtn2Down)){
-				appbtn=kCGEventRightMouseDown;
+				appbtn2=kCGEventRightMouseDown;
 				mousebtn2Down=true;
 			}else if (mousebtn2Down){
-				appbtn=kCGEventRightMouseUp;
+				appbtn2=kCGEventRightMouseUp;
 				mousebtn2Down=false;
 			}
-			if (appbtn!=-1){
+			if (appbtn2!=kCGEventNull){
 				moveonly=false;
-				CGEventRef theEvent = CGEventCreateMouseEvent(NULL,appbtn,cmp,kCGMouseButtonRight);
+				CGEventRef theEvent = CGEventCreateMouseEvent(NULL,appbtn2,cmp,kCGMouseButtonRight);
 				CGEventSetFlags(theEvent, (CGEventFlags)getModifiers(ctrl,alt,shift,command));
 				CGEventPost(kCGHIDEventTap, theEvent);
 				CFRelease(theEvent);
 			}
-			/*appbtn=-1;
+			/*appbtn3=-1;
 			if ((button & 4) && (!mousebtn3Down)){
-				appbtn=Button2;
+				appbtn3=Button2;
 				mousebtn3Down=true;
 			}else if (mousebtn3Down){
-				appbtn=Button2;
+				appbtn3=Button2;
 				mousebtn3Down=false;
 			}
-			if (appbtn!=-1){
-				mouseButton(appbtn, mousebtn3Down);
+			if (appbtn3!=-1){
+				mouseButton(appbtn3, mousebtn3Down);
 			}*/
 		}
 		if (moveonly){

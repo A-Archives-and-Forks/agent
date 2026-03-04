@@ -267,8 +267,9 @@ void WindowsInputs::keyboard(const char* type,const char* key, bool ctrl, bool a
 					wHankaku = (bthi >> 3 & 1) != 0;
 					if ((wCtrl && wAlt) || wHankaku){ //VK_KANA ???
 						sendunicode=true;
+					/* REMOVED DUE TO ISSUE WITH OTHER KEYBOARD
 					}else if (strcmp(key,"46")==0){ //??? Putty issue 46=.
-						sendunicode=true;
+						sendunicode=true;*/
 					}
 
 					if (!sendunicode){

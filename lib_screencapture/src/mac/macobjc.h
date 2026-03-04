@@ -14,6 +14,7 @@
 };*/
 
 //void macobjcInitApplication();
+long macobjcGetClipboardChangeCount();
 int macobjcGetClipboardText(wchar_t** wText);
 void macobjcSetClipboardText(wchar_t* wText);
 //MouseImageCapture macobjcCaptureMouseImage(void* prevoref);

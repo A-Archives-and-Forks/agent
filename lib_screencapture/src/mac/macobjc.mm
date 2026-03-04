@@ -6,6 +6,11 @@
 
 //__strong NSImage* macobjcCaptureMouseImagePrev = NULL;
 
+long macobjcGetClipboardChangeCount(){
+	NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
+	return pasteboard.changeCount;
+}
+
 int macobjcGetClipboardText(wchar_t** wText){
 	NSPasteboard* pasteboard = [NSPasteboard generalPasteboard];
 	NSString* string = [pasteboard stringForType:NSPasteboardTypeString];

@@ -112,60 +112,156 @@ void handleXEvents(){
 		}
 
 		//GET CLIPBOARD
+		if (event.type == PropertyNotify){
+			if (incractiveget==true &&
+						event.xproperty.state == PropertyNewValue &&
+						event.xproperty.window == incrrequestor &&
+						event.xproperty.atom == incrproperty) {
+				int format;
+				unsigned long remaining, size;
+				char *data = NULL;
+				Atom target;
+				XGetWindowProperty(event.xproperty.display, incrrequestor,incrproperty, 0L, (~0L), True, AnyPropertyType, &target, &format, &size, &remaining, (unsigned char**)&data);
+				if (size==0){
+					size_t needed = mbstowcs(NULL, copytxtincr.c_str(), 0) + 1;
+					if (needed != (size_t)-1) {
+						copytxt.clear();
+						copytxt.resize(needed);
+						size_t converted = mbstowcs(&copytxt[0], copytxtincr.c_str(), needed);
+						if (converted != (size_t)-1) {
+							copytxt.resize(converted);
+						}else{
+							copytxt.clear();
+						}
+						clipboardChanges=true;
+					}
+					copytxtincr.clear();
+					incractiveget=false;
+					XSelectInput(event.xselection.display, incrrequestor, incrwa.your_event_mask);
+					incrrequestor=NULL;
+					incrproperty=NULL;
+				} else {
+					if (data) {
+						copytxtincr.append(data, size);
+						XFree(data);
+					}
+				}
+			}
+		}
 		if (event.type == SelectionNotify) {
 			//printf("SelectionNotify\n");
-			if ((event.xselection.selection==atomClipboard) && (event.xselection.property)) {
+			if ((event.xselection.selection==atomClipboard) && (event.xselection.property)){
 				int format;
-				unsigned long N, size;
+				unsigned long remaining, size;
 				char * data;
 				Atom target;
 				XGetWindowProperty(event.xselection.display, event.xselection.requestor,
 					event.xselection.property, 0L,(~0L), 0, AnyPropertyType, &target,
-					&format, &size, &N,(unsigned char**)&data);
-				if (target == atomStrTp) {
-					wchar_t* dest = (wchar_t*)malloc((size+1) * sizeof(wchar_t));
-					mbstowcs(dest, (char*)data, size+1);
-					copytxt.append(dest);
-					free(dest);
+					&format, &size, &remaining,(unsigned char**)&data);
+
+				if (target == atomStrIncr) {
 					XFree(data);
-					copyok=true;
-
-					clipboardChanges=true;
-
+					XGetWindowAttributes(event.xselection.display, event.xselection.requestor, &incrwa);
+					XSelectInput(event.xselection.display, event.xselection.requestor, incrwa.your_event_mask | PropertyChangeMask);
+					incrrequestor=event.xselection.requestor;
+					incrproperty=event.xselection.property;
+					incractiveget=true;
+					XDeleteProperty(event.xselection.display, incrrequestor, incrproperty);
+					XFlush(event.xselection.display);
+				}else if (target == atomStrTp) {
+					size_t needed = mbstowcs(NULL, data, size) + 1;
+					if (needed != (size_t)-1) {
+						copytxt.clear();
+						copytxt.resize(needed);
+						size_t converted = mbstowcs(&copytxt[0], data, needed);
+						if (converted != (size_t)-1) {
+							copytxt.resize(converted);
+						}else{
+							copytxt.clear();
+						}
+						clipboardChanges=true;
+					}
+					XFree(data);
+					copytxtincr.clear();
+					XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
+				}else{
+					XFree(data);
 				}
-				XDeleteProperty(event.xselection.display, event.xselection.requestor, event.xselection.property);
 			}
 		}
+
 		//SET CLIPBOARD
+		if (event.type == PropertyNotify){
+			if (incractiveset==true &&
+						event.xproperty.state == PropertyDelete &&
+						event.xproperty.window == incrrequestor &&
+						event.xproperty.atom == incrproperty) {
+				if (incroffset < pastetxtincr.size()) {
+					size_t chunkSize = pastetxtincr.size()-incroffset;
+					if (chunkSize>65536){
+						chunkSize=65536;
+					}
+					XChangeProperty(event.xproperty.display, incrrequestor, incrproperty, incrtarget, 8, PropModeReplace, (unsigned char*)(pastetxtincr.c_str() + incroffset), chunkSize);
+					incroffset+=chunkSize;
+				}else{
+					XChangeProperty(event.xproperty.display, incrrequestor, incrproperty, incrtarget, 8, PropModeReplace, NULL, 0);
+					pastetxtincr.clear();
+					incractiveset=false;
+					XSelectInput(event.xselection.display, incrrequestor, incrwa.your_event_mask);
+					incrrequestor=NULL;
+					incrproperty=NULL;
+					incrtarget=NULL;
+				}
+			}
+		}
 		if (event.type == SelectionRequest) {
 			//printf("SelectionRequest\n");
-			if ((event.xselectionrequest.selection == atomClipboard) && (pastetxt.length()>0)){
+			if ((event.xselectionrequest.selection == atomClipboard)){
 				XSelectionRequestEvent * xsr = &event.xselectionrequest;
 				XSelectionEvent ev = {0};
-				int ret = 0;
-				ev.type = SelectionNotify, ev.display = xsr->display, ev.requestor = xsr->requestor,
-				ev.selection = xsr->selection, ev.time = xsr->time, ev.target = xsr->target, ev.property = xsr->property;
-				if (ev.target == atomTargets){
-					ret = XChangeProperty (ev.display, ev.requestor, ev.property, 4, 32, PropModeReplace, (unsigned char*)&atomStrTp, 1);
-				}else if (ev.target == 31 || ev.target == atomText){ //XA_STRING=31;
+				ev.type = SelectionNotify;
+				ev.display = xsr->display;
+				ev.requestor = xsr->requestor;
+				ev.selection = xsr->selection;
+				ev.time = xsr->time;
+				ev.target = xsr->target;
+				ev.property = xsr->property;
+
+				if (ev.property == None){
+					ev.property = ev.target;
+				}
+
+				//XA_STRING=31
+				//XA_ATOM==4
+				if (ev.target == atomTargets) {
+					Atom targets[] = { atomStrTp, 31, atomTargets, XInternAtom(xsr->display, "TIMESTAMP", False), XInternAtom(xsr->display, "INCR", False) };
+					XChangeProperty(ev.display, ev.requestor, ev.property, 4, 32, PropModeReplace, (unsigned char*)targets, 5);
+				}else if (ev.target == 31 || ev.target == atomStrTp || ev.target == atomText) {
+					pastetxtincr.clear();
 					wchar_t* chrs = (wchar_t*)pastetxt.c_str();
 					size_t requiredSize = wcstombs(NULL, chrs, 0);
 					char* dest = (char*)malloc((requiredSize+1) * sizeof(char));
 					wcstombs(dest, chrs, requiredSize+1);
-					ret = XChangeProperty(ev.display, ev.requestor, ev.property, 31, 8, PropModeReplace, (unsigned char*)dest, requiredSize);
+					pastetxtincr.append(dest,requiredSize);
 					free(dest);
-				}else if (ev.target == atomStrTp){
-					wchar_t* chrs = (wchar_t*)pastetxt.c_str();
-					size_t requiredSize = wcstombs(NULL, chrs, 0);
-					char* dest = (char*)malloc(((requiredSize)+1) * sizeof(char));
-					wcstombs(dest, chrs, requiredSize+1);
-					ret = XChangeProperty(ev.display, ev.requestor, ev.property, atomStrTp, 8, PropModeReplace, (unsigned char*)dest, requiredSize);
-					free(dest);
-				}else{
-					ev.property = None;
+					if (pastetxtincr.size() <= 65536) {
+						XChangeProperty(ev.display, ev.requestor, ev.property, ev.target, 8, PropModeReplace,(unsigned char*)pastetxtincr.c_str(), pastetxtincr.size());
+						pastetxtincr.clear();
+					}else{
+						incractiveset=true;
+						incroffset=0;
+						incrrequestor=ev.requestor;
+						incrproperty=ev.property;
+						incrtarget=ev.target;
+						XGetWindowAttributes(ev.display, ev.requestor, &incrwa);
+						XSelectInput(ev.display, ev.requestor, incrwa.your_event_mask | PropertyChangeMask);
+						Atom atomIncr = XInternAtom(ev.display, "INCR", False);
+						long totalSize = (long)pastetxtincr.size();
+						XChangeProperty(ev.display, ev.requestor, ev.property, atomIncr, 32, PropModeReplace, (unsigned char*)&totalSize, 1);
+					}
 				}
-				if ((ret & 2) == 0){
-					XSendEvent(xdpy, ev.requestor, 0, 0, (XEvent *)&ev);
+				if (ev.property != None) {
+					XSendEvent(xsr->display, ev.requestor, True, 0, (XEvent *)&ev);
 				}
 			}
 		}
@@ -500,6 +596,9 @@ void DWAScreenCapturePaste(){
 }
 
 void DWAScreenCaptureGetClipboardChanges(CLIPBOARD_DATA* clipboardData){
+	if ((xdpy!=NULL) && (incractiveget==true)){
+		handleXEvents();
+	}
 	clipboardData->type=0;
 	if (clipboardChanges){
 		clipboardChanges=false;
@@ -517,7 +616,9 @@ void DWAScreenCaptureSetClipboard(CLIPBOARD_DATA* clipboardData){
 		if (XGetSelectionOwner (xdpy, atomClipboard) == fakewindow){
 			pastetxt.clear();
 			pastetxt.append((wchar_t*)clipboardData->data,(clipboardData->sizedata / sizeof(wchar_t)));
-			handleXEvents();
+			if (pastetxt.length()>0){
+				handleXEvents();
+			}
 		}
 	}
 }
@@ -529,6 +630,9 @@ bool DWAScreenCaptureLoad() {
 	visual = NULL;
 	damageok=false;
 	xfixesok=false;
+	incractiveget=false;
+	incractiveset=false;
+	incroffset=0;
 	cpuUsage=new LinuxCPUUsage();
 	linuxInputs=new LinuxInputs();
 	loadXrandr("/usr/lib");
@@ -669,6 +773,7 @@ int DWAScreenCaptureGetMonitorsInfo(MONITORS_INFO* moninfo){
 			if(atomStrTp  == None){
 				atomStrTp = 31; //XA_STRING
 			}
+			atomStrIncr = XInternAtom(xdpy, "INCR", 0);
 			atomClipboard = XInternAtom(xdpy, "CLIPBOARD", 0);
 			atomXSelData = XInternAtom(xdpy, "XSEL_DATA", 0);
 			atomTargets = XInternAtom(xdpy, "TARGETS", 0);
