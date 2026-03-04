@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Girilən kod etibarsızdır.',
     'errorInvalidUserPassword':u'Yanlış istifadəçi və ya parol.',
     'fieldRequired':u'\'{0}\' sahəsi tələb olunur.',
+    'groupName':u'Qrup adı',
     'install':u'Yüklemek',
     'installMonitor':u'Monitor quraşdırılır ...',
     'installMonitorErr':u'Quraşdırma monitoru alınmadı.',

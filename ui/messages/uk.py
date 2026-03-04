@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Введений код недійсний.',
     'errorInvalidUserPassword':u'Недійсний користувач або пароль.',
     'fieldRequired':u'Поле \'{0}\' є обов\'язковим.',
+    'groupName':u'ім\'я групи',
     'install':u'Встановити',
     'installMonitor':u'Встановлення монітора ...',
     'installMonitorErr':u'Помилка встановлення монітора.',

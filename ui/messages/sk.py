@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Chybný vložený kód.',
     'errorInvalidUserPassword':u'Nesprávný užívateľ alebo heslo',
     'fieldRequired':u'Pole \'{0}\' je potrebné.',
+    'groupName':u'Názov skupiny',
     'install':u'Inštalácia',
     'installMonitor':u'Inštaluje sa monitor',
     'installMonitorErr':u'Inštalácia monitoru bola neuúspešná.',

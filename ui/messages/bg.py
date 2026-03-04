@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Въведеният код е невалиден.',
     'errorInvalidUserPassword':u'Невалиден потребител или парола.',
     'fieldRequired':u'Полето "{0}" е задължително.',
+    'groupName':u'Име на групата',
     'install':u'Инсталирай',
     'installMonitor':u'Инсталиране на монитора ...',
     'installMonitorErr':u'Инсталирането на монитор е неуспешно.',

@@ -25,9 +25,9 @@ class Compile(compile_generic.Compile):
         elif osn=="linux":
             conf={}
             conf["outname"]="dwaggdi.so" 
-            conf["cpp_include_paths"]=["/usr/include/freetype2"]
+            conf["cpp_include_paths"]=["/usr/include/freetype2","/usr/include/dbus-1.0","/usr/lib/dbus-1.0/include"]
             conf["cpp_library_paths"]=conf["cpp_include_paths"]
-            conf["libraries"]=["X11", "Xpm","Xft"]
+            conf["libraries"]=["X11", "Xpm","Xft","dbus-1"]
         elif osn=="mac":
             None
             conf={}

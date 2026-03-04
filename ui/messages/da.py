@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Koden er ugyldig.',
     'errorInvalidUserPassword':u'Forkert brugernavn eller kodeord.',
     'fieldRequired':u'Feltet \'{0}\' er påkrævet.',
+    'groupName':u'Gruppenavn',
     'install':u'Installer',
     'installMonitor':u'Installation af monitor...',
     'installMonitorErr':u'Installation af monitor mislykkedes.',

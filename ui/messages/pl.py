@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Wprowadzono błędny kod.',
     'errorInvalidUserPassword':u'Nieprawidłowy użytkownik lub hasło.',
     'fieldRequired':u'Pole \'{0}\' jest wymagane.',
+    'groupName':u'Nazwa grupy',
     'install':u'Zainstaluj',
     'installMonitor':u'Instalowanie monitora...',
     'installMonitorErr':u'Instalacja monitora nie powiodła się.',

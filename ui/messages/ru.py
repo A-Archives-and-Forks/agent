@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Введенный код недействителен.',
     'errorInvalidUserPassword':u'Неверное имя пользователя или пароль.',
     'fieldRequired':u'Поле \'{0}\' является обязательным.',
+    'groupName':u'Имя группы',
     'install':u'Установить',
     'installMonitor':u'Мониторинг устанавливается...',
     'installMonitorErr':u'Не удалось установить мониторинг.',

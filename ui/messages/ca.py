@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'El codi que has introduït no és vàlid.',
     'errorInvalidUserPassword':u'Usuari o paraula de pas no correctes.',
     'fieldRequired':u'Es requereix el camp \'{0}\'.',
+    'groupName':u'Nom del grup',
     'install':u'Instal·lar',
     'installMonitor':u'Instal·lant el monitor...',
     'installMonitorErr':u'Instal·lació del monitor fallida.',

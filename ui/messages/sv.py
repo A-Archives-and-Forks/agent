@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Inskriven kod är felaktig.',
     'errorInvalidUserPassword':u'Ogiltig användare eller lösenord.',
     'fieldRequired':u'Fältet \'{0}\' är obligatoriskt.',
+    'groupName':u'Gruppnamn',
     'install':u'Installera',
     'installMonitor':u'Installerar monitor...',
     'installMonitorErr':u'Installation av monitor misslyckades.',

@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Sisestatud kood ei ole õige.',
     'errorInvalidUserPassword':u'Vale kasutaja või parool.',
     'fieldRequired':u'Välja \'{0}\' täitmine on kohustuslik.',
+    'groupName':u'Grupi nimi',
     'install':u'Paigalda',
     'installMonitor':u'Lisan monitori...',
     'installMonitorErr':u'Monitori lisamine nurjus.',

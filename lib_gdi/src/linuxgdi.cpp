@@ -7,9 +7,14 @@ with this file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include "main.h"
 
+#include <dbus/dbus.h>
+#include <signal.h>
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <iconv.h>
+#include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
@@ -68,6 +73,15 @@ struct DWANotifyIcon {
 	GC gc;
 	int w;
 	int h;
+	wstring dbusServiceName;
+	wstring dbusAppid;
+	wstring dbusTitle;
+	pthread_t dbusThread;
+	DBusConnection* dbusConnection;
+	bool dbusSNI;
+	bool dbusRunning;
+	bool dbusIconUpdated;
+	bool dbusIconTrayStatus; //0 LOAD IN PROGRESS; 1 LOADED; 2 ERROR
 };
 std::vector<DWANotifyIcon*> notifyIconList;
 
@@ -101,6 +115,810 @@ DWAWindow* addWindow(int id, Window win,GC gc,XIC ic){
 	return ww;
 }
 
+int timedJoin(pthread_t thread, void **retval, unsigned int timeout_ms) {
+    struct timespec start, now;
+    clock_gettime(CLOCK_REALTIME, &start);
+
+    while (1) {
+        if (pthread_kill(thread, 0) == ESRCH) {
+            return pthread_join(thread, retval);
+        }
+        clock_gettime(CLOCK_REALTIME, &now);
+        unsigned long elapsed_ms = (now.tv_sec - start.tv_sec) * 1000 +
+                                   (now.tv_nsec - start.tv_nsec) / 1000000;
+        if (elapsed_ms >= timeout_ms) {
+            return ETIMEDOUT;
+        }
+        usleep(1000);
+    }
+}
+
+bool isWayland() {
+    const char *session_type = getenv("XDG_SESSION_TYPE");
+    if (session_type && strcmp(session_type, "wayland") == 0) {
+        return true;
+    }
+    const char *wayland_display = getenv("WAYLAND_DISPLAY");
+    return (wayland_display != NULL);
+}
+
+const char* getDesktopEnvironment() {
+    const char* d = getenv("XDG_CURRENT_DESKTOP");
+    if (!d) {
+        FILE* pipe = popen("echo $XDG_CURRENT_DESKTOP", "r");
+        if (pipe) {
+            static char buffer[64];
+            if (fgets(buffer, sizeof(buffer), pipe)) {
+                d = buffer;
+            }
+            pclose(pipe);
+        }
+    }
+    if (d){
+    	return d;
+    }else{
+    	return "unknown";
+    }
+}
+
+char* wstringToUtf8(const std::wstring& wstr) {
+    if (wstr.empty()) {
+        char* empty = (char*)malloc(1);
+        empty[0] = '\0';
+        return empty;
+    }
+    const char* fenc = (sizeof(wchar_t) == 4) ? "UTF-32LE" : "UTF-16LE";
+    iconv_t cd = iconv_open("UTF-8", fenc);
+    if (cd == (iconv_t)-1) {
+        perror("iconv_open");
+        return NULL;
+    }
+    size_t btin = wstr.size() * sizeof(wchar_t);
+    size_t btout = wstr.size() * 4 + 1;
+    char* bfin = (char*)wstr.c_str();
+    char* bfout = (char*)malloc(btout);
+    if (!bfout) {
+        iconv_close(cd);
+        return NULL;
+    }
+    memset(bfout, 0, btout);
+    char* ptin = bfin;
+    char* ptout = bfout;
+    size_t lfin = btin;
+    size_t lfout = btout - 1;
+    if (iconv(cd, &ptin, &lfin, &ptout, &lfout) == (size_t)-1) {
+        perror("iconv");
+        iconv_close(cd);
+        free(bfout);
+        return NULL;
+    }
+    iconv_close(cd);
+    bfout[btout-lfout-1] = '\0';
+    return bfout;
+}
+
+int dbusAppendStringProperty(DBusMessageIter *iter, const char *name, const char *value,int isGetAll) {
+    DBusMessageIter entry, variant;
+    if (isGetAll) {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "s", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "s", &variant))
+            return 0;
+    }
+    if (!dbus_message_iter_append_basic(&variant, DBUS_TYPE_STRING, &value))
+        return 0;
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+
+    return 1;
+}
+
+int dbusAppendIconPixmap(DBusMessageIter *iter, const wchar_t* iconPath, int isGetAll) {
+    DBusMessageIter entry, variant, array, structIter, dataArray;
+    const char *property_name = "IconPixmap";
+    if (isGetAll) {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &property_name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "a(iiay)", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "a(iiay)", &variant))
+            return 0;
+    }
+
+    if (!dbus_message_iter_open_container(&variant, DBUS_TYPE_ARRAY, "(iiay)", &array))
+        return 0;
+
+    if (!dbus_message_iter_open_container(&array, DBUS_TYPE_STRUCT, NULL, &structIter))
+        return 0;
+
+    int width = 16;
+    int height = 16;
+    ImageReader imgr;
+	imgr.load(iconPath);
+	if (imgr.isLoaded()){
+		width=imgr.getWidth();
+		height=imgr.getHeight();
+	}
+	if (!dbus_message_iter_append_basic(&structIter, DBUS_TYPE_INT32, &width))
+        return 0;
+    if (!dbus_message_iter_append_basic(&structIter, DBUS_TYPE_INT32, &height))
+        return 0;
+    if (!dbus_message_iter_open_container(&structIter, DBUS_TYPE_ARRAY, "y", &dataArray))
+        return 0;
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+
+            if (imgr.isLoaded()){
+				unsigned char r;
+				unsigned char g;
+				unsigned char b;
+				unsigned char a;
+				imgr.getPixel(x, y, &r, &g, &b, &a);
+				if (!dbus_message_iter_append_basic(&dataArray, DBUS_TYPE_BYTE, &a))
+					return 0;
+				if (!dbus_message_iter_append_basic(&dataArray, DBUS_TYPE_BYTE, &r))
+					return 0;
+				if (!dbus_message_iter_append_basic(&dataArray, DBUS_TYPE_BYTE, &g))
+					return 0;
+				if (!dbus_message_iter_append_basic(&dataArray, DBUS_TYPE_BYTE, &b))
+					return 0;
+			}else{
+				unsigned char pixel[4];
+				pixel[0] = 0x00;
+				pixel[1] = 0x00;
+				pixel[2] = 0x00;
+				pixel[3] = 0x00;
+				for (int i = 0; i < 4; i++) {
+					if (!dbus_message_iter_append_basic(&dataArray, DBUS_TYPE_BYTE, &pixel[i]))
+						return 0;
+				}
+			}
+        }
+    }
+    if (imgr.isLoaded()){
+		imgr.destroy();
+	}
+    if (!dbus_message_iter_close_container(&structIter, &dataArray))
+        return 0;
+    if (!dbus_message_iter_close_container(&array, &structIter))
+        return 0;
+    if (!dbus_message_iter_close_container(&variant, &array))
+        return 0;
+
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+
+    return 1;
+}
+
+int dbusAppendEmptyPixmap(DBusMessageIter *iter, const char *name, int isGetAll) {
+    DBusMessageIter entry, variant, array;
+    if (isGetAll) {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "a(iiay)", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "a(iiay)", &variant))
+            return 0;
+    }
+    if (!dbus_message_iter_open_container(&variant, DBUS_TYPE_ARRAY, "(iiay)", &array))
+        return 0;
+    if (!dbus_message_iter_close_container(&variant, &array))
+        return 0;
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+    return 1;
+}
+
+int dbusAppendBoolProperty(DBusMessageIter *iter, const char *name, dbus_bool_t value, int isGetAll) {
+    DBusMessageIter entry, variant;
+    if (isGetAll) {
+        if (!name) return 0;
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "b", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "b", &variant))
+            return 0;
+    }
+    if (!dbus_message_iter_append_basic(&variant, DBUS_TYPE_BOOLEAN, &value)){
+    	if (isGetAll) {
+    		dbus_message_iter_close_container(&entry, &variant);
+		} else {
+			dbus_message_iter_close_container(iter, &variant);
+		}
+		return 0;
+    }
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+    return 1;
+}
+
+int dbusAppendMenuProperty(DBusMessageIter *iter, const char *name, const char *menu_path, int isGetAll) {
+    DBusMessageIter entry, variant;
+    if (isGetAll) {
+        if (!name) return 0;
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "o", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "o", &variant))
+            return 0;
+    }
+    if (!dbus_message_iter_append_basic(&variant, DBUS_TYPE_OBJECT_PATH, &menu_path)){
+    	if (isGetAll) {
+    		dbus_message_iter_close_container(&entry, &variant);
+		} else {
+			dbus_message_iter_close_container(iter, &variant);
+		}
+    	return 0;
+    }
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+
+    return 1;
+}
+
+int dbusAppendTooltipProperty(DBusMessageIter *iter, const char *name, const char *iconName, const char *title, const char *description, int isGetAll) {
+    DBusMessageIter entry, variant, structIter, pixmapArray;
+
+    if (!iconName) iconName = "";
+    if (!title) title = "";
+    if (!description) description = "";
+    if (isGetAll) {
+        if (!name) return 0;
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_DICT_ENTRY, NULL, &entry))
+            return 0;
+        if (!dbus_message_iter_append_basic(&entry, DBUS_TYPE_STRING, &name))
+            return 0;
+        if (!dbus_message_iter_open_container(&entry, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant))
+            return 0;
+    } else {
+        if (!dbus_message_iter_open_container(iter, DBUS_TYPE_VARIANT, "(sa(iiay)ss)", &variant))
+            return 0;
+    }
+    if (!dbus_message_iter_open_container(&variant, DBUS_TYPE_STRUCT, NULL, &structIter)){
+    	if (isGetAll) {
+    		dbus_message_iter_close_container(&entry, &variant);
+		} else {
+			dbus_message_iter_close_container(iter, &variant);
+		}
+    	return 0;
+    }
+    if (!dbus_message_iter_append_basic(&structIter, DBUS_TYPE_STRING, &iconName)){
+    	dbus_message_iter_close_container(&variant, &structIter);
+		return 0;
+    }
+    if (!dbus_message_iter_open_container(&structIter, DBUS_TYPE_ARRAY, "(iiay)", &pixmapArray)){
+    	dbus_message_iter_close_container(&variant, &structIter);
+		return 0;
+    }
+    if (!dbus_message_iter_close_container(&structIter, &pixmapArray)){
+    	dbus_message_iter_close_container(&variant, &structIter);
+		return 0;
+    }
+    if (!dbus_message_iter_append_basic(&structIter, DBUS_TYPE_STRING, &title)){
+    	dbus_message_iter_close_container(&variant, &structIter);
+		return 0;
+    }
+    if (!dbus_message_iter_append_basic(&structIter, DBUS_TYPE_STRING, &description)){
+    	dbus_message_iter_close_container(&variant, &structIter);
+		return 0;
+    }
+    if (!dbus_message_iter_close_container(&variant, &structIter)){
+    	if (isGetAll) {
+    		dbus_message_iter_close_container(&entry, &variant);
+		} else {
+			dbus_message_iter_close_container(iter, &variant);
+		}
+    	return 0;
+    }
+    if (isGetAll) {
+        if (!dbus_message_iter_close_container(&entry, &variant))
+            return 0;
+        if (!dbus_message_iter_close_container(iter, &entry))
+            return 0;
+    } else {
+        if (!dbus_message_iter_close_container(iter, &variant))
+            return 0;
+    }
+    return 1;
+}
+
+void dbusNotifyNewIcon(DBusConnection* connection) {
+    DBusMessage* signal = dbus_message_new_signal(
+        "/StatusNotifierItem",
+        "org.kde.StatusNotifierItem",
+        "NewIcon"
+    );
+    dbus_connection_send(connection, signal, NULL);
+    dbus_connection_flush(connection);
+    dbus_message_unref(signal);
+}
+
+DBusHandlerResult dbusPropertyGet(DBusConnection *conn, DBusMessage *msg, void* userData) {
+	DWANotifyIcon* ww = static_cast<DWANotifyIcon*>(userData);
+    DBusMessage *reply;
+    const char *interface;
+    const char *property;
+    if (!dbus_message_get_args(msg, NULL,
+                               DBUS_TYPE_STRING, &interface,
+                               DBUS_TYPE_STRING, &property,
+                               DBUS_TYPE_INVALID)) {
+        return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+    }
+    reply = dbus_message_new_method_return(msg);
+    if (!reply)
+        return DBUS_HANDLER_RESULT_NEED_MEMORY;
+    DBusMessageIter iter;
+    dbus_message_iter_init_append(reply, &iter);
+    int success = 0;
+    if (strcmp(property, "Id") == 0) {
+		char* appid=wstringToUtf8(ww->dbusAppid);
+        success = dbusAppendStringProperty(&iter, NULL, appid, 0);
+    }else if (strcmp(property, "Category") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "ApplicationStatus", 0);
+    }else if (strcmp(property, "Status") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "Active", 0);
+    }else if (strcmp(property, "Title") == 0) {
+		char* title=wstringToUtf8(ww->dbusTitle);
+        success = dbusAppendStringProperty(&iter, NULL, title, 0);
+    }else if (strcmp(property, "IconName") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "", 0);
+    }else if (strcmp(property, "IconPixmap") == 0) {
+        success = dbusAppendIconPixmap(&iter, ww->iconPath.c_str(), 0);
+    }else if (strcmp(property, "IconThemePath") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "", 0);
+    }else if (strcmp(property, "OverlayIconName") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "", 0);
+    }else if (strcmp(property, "OverlayIconPixmap") == 0) {
+        success = dbusAppendEmptyPixmap(&iter, NULL, 0);
+    }else if (strcmp(property, "AttentionIconName") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "", 0);
+    }else if (strcmp(property, "AttentionIconPixmap") == 0) {
+        success = dbusAppendEmptyPixmap(&iter, NULL, 0);
+    }else if (strcmp(property, "AttentionMovieName") == 0) {
+        success = dbusAppendStringProperty(&iter, NULL, "", 0);
+    }else if (strcmp(property, "ToolTip") == 0) {
+		char* title=wstringToUtf8(ww->dbusTitle);
+        success = dbusAppendTooltipProperty(&iter, NULL, "", title, "", 0);
+    }else if (strcmp(property, "Menu") == 0) {
+        success = dbusAppendMenuProperty(&iter, NULL, "/MenuBar", 0);
+    }else if (strcmp(property, "ItemIsMenu") == 0) {
+        dbus_bool_t valueItemIsMenu = FALSE;
+        success = dbusAppendBoolProperty(&iter, NULL, valueItemIsMenu, 0);
+    }else{
+        dbus_message_unref(reply);
+        reply = dbus_message_new_error(msg,
+                                       "org.freedesktop.DBus.Error.UnknownProperty",
+                                       "Property not found");
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    if (!success) {
+        dbus_message_unref(reply);
+        reply = dbus_message_new_error(msg,
+                                       "org.freedesktop.DBus.Error.Failed",
+                                       "Failed to build property value");
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+
+    dbus_connection_send(conn, reply, NULL);
+    dbus_message_unref(reply);
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+DBusHandlerResult dbusPropertyGetAll(DBusConnection *conn, DBusMessage *msg, void* userData) {
+	DWANotifyIcon* ww = static_cast<DWANotifyIcon*>(userData);
+    DBusMessage* reply = dbus_message_new_method_return(msg);
+	if (!reply) {
+		return DBUS_HANDLER_RESULT_NEED_MEMORY;
+	}
+	DBusMessageIter args, dictIter;
+	dbus_message_iter_init_append(reply, &args);
+	if (!dbus_message_iter_open_container(&args, DBUS_TYPE_ARRAY, "{sv}", &dictIter)) {
+		dbus_message_unref(reply);
+		return DBUS_HANDLER_RESULT_NEED_MEMORY;
+	}
+
+    bool success = true;
+    char* appid=wstringToUtf8(ww->dbusAppid);
+    char* title=wstringToUtf8(ww->dbusTitle);
+    success &= dbusAppendStringProperty(&dictIter,"Id",appid,1);
+    success &= dbusAppendStringProperty(&dictIter,"Category","ApplicationStatus",1);
+	success &= dbusAppendStringProperty(&dictIter,"Title",title,1);
+	success &= dbusAppendStringProperty(&dictIter,"Status","Active",1);
+	success &= dbusAppendStringProperty(&dictIter,"IconName","",1);
+	success &= dbusAppendStringProperty(&dictIter,"IconThemePath","",1);
+	success &= dbusAppendIconPixmap(&dictIter,ww->iconPath.c_str(),1);
+	success &= dbusAppendStringProperty(&dictIter,"OverlayIconName","",1);
+	success &= dbusAppendEmptyPixmap(&dictIter,"OverlayIconPixmap",1);
+	success &= dbusAppendStringProperty(&dictIter,"AttentionIconName","",1);
+	success &= dbusAppendEmptyPixmap(&dictIter,"AttentionIconPixmap",1);
+	success &= dbusAppendStringProperty(&dictIter,"AttentionMovieName","",1);
+	success &= dbusAppendTooltipProperty(&dictIter,"ToolTip","",title,"",1);
+	success &= dbusAppendMenuProperty(&dictIter,"Menu","/MenuBar",1);
+	dbus_bool_t valueItemIsMenu = FALSE;
+	success &= dbusAppendBoolProperty(&dictIter,"ItemIsMenu",valueItemIsMenu,1);
+    if (!success) {
+        dbus_message_unref(reply);
+        reply = dbus_message_new_error(msg,
+                                       "org.freedesktop.DBus.Error.Failed",
+                                       "Failed to build properties dictionary");
+        dbus_connection_send(conn, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    if (!dbus_message_iter_close_container(&args, &dictIter)) {
+		dbus_message_unref(reply);
+		return DBUS_HANDLER_RESULT_NEED_MEMORY;
+	}
+	if (!dbus_connection_send(conn, reply, NULL)) {
+
+	}
+	dbus_message_unref(reply);
+	return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+DBusHandlerResult dbusMessageHandlerTrayIcon(DBusConnection* connection, DBusMessage* message, void* userData) {
+
+    if (dbus_message_is_method_call(message, "org.kde.StatusNotifierItem", "ContextMenu")) {
+        DBusMessage* reply = dbus_message_new_method_return(message);
+        dbus_connection_send(connection, reply, NULL);
+        dbus_message_unref(reply);
+        DWANotifyIcon* ww = static_cast<DWANotifyIcon*>(userData);
+        JSONWriter jonextevent1;
+        jonextevent1.clear();
+		jonextevent1.beginObject();
+		jonextevent1.addString(L"name", L"NOTIFY");
+		jonextevent1.addString(L"action", L"CONTEXTMENU");
+		jonextevent1.addNumber(L"id", ww->id);
+		jonextevent1.endObject();
+		g_callEventMessage(jonextevent1.getString().c_str());
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }else if (dbus_message_is_method_call(message, "org.kde.StatusNotifierItem", "Activate")) {
+    	DBusMessage* reply = dbus_message_new_method_return(message);
+        dbus_connection_send(connection, reply, NULL);
+        dbus_message_unref(reply);
+        DWANotifyIcon* ww = static_cast<DWANotifyIcon*>(userData);
+        JSONWriter jonextevent1;
+        jonextevent1.clear();
+		jonextevent1.beginObject();
+		jonextevent1.addString(L"name", L"NOTIFY");
+		jonextevent1.addString(L"action", L"ACTIVATE");
+		jonextevent1.addNumber(L"id", ww->id);
+		jonextevent1.endObject();
+		g_callEventMessage(jonextevent1.getString().c_str());
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }else if (dbus_message_is_method_call(message, "org.freedesktop.DBus.Properties", "Get")) {
+		const char* interfaceName;
+        const char* propertyName;
+        if (dbus_message_get_args(message, NULL, DBUS_TYPE_STRING, &interfaceName, DBUS_TYPE_STRING, &propertyName, DBUS_TYPE_INVALID)) {
+			return dbusPropertyGet(connection, message, userData);
+        }
+    }else if (dbus_message_is_method_call(message, "org.freedesktop.DBus.Properties", "GetAll")) {
+			return dbusPropertyGetAll(connection, message, userData);
+	}else if (dbus_message_is_method_call(message, "com.canonical.dbusmenu", "GetLayout")) {
+        unsigned int revision = 1;
+        const char* empty_menu = "<dbusmenu/>";
+
+        DBusMessage* reply = dbus_message_new_method_return(message);
+        dbus_message_append_args(
+            reply,
+            DBUS_TYPE_UINT32, &revision,
+            DBUS_TYPE_STRING, &empty_menu,
+            DBUS_TYPE_INVALID
+        );
+        dbus_connection_send(connection, reply, NULL);
+        dbus_message_unref(reply);
+        return DBUS_HANDLER_RESULT_HANDLED;
+    }
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+bool dbusIsRegisterTrayIcon(DWANotifyIcon* dwanfi) {
+	if (dwanfi->dbusIconTrayStatus!=1){
+		return true;
+	}
+	DBusError err;
+    dbus_error_init(&err);
+    DBusMessage* msg = dbus_message_new_method_call(
+        "org.kde.StatusNotifierWatcher",  // Service del watcher
+        "/StatusNotifierWatcher",         // Object path
+        "org.freedesktop.DBus.Properties",  // Interfaccia Properties
+        "Get"                             // Metodo Get
+    );
+    if (!msg) {
+        return true; //I can't determinate if visible
+    }
+    const char* interface = "org.kde.StatusNotifierWatcher";
+    const char* property = "RegisteredStatusNotifierItems";
+    dbus_message_append_args(msg, DBUS_TYPE_STRING, &interface, DBUS_TYPE_STRING, &property, DBUS_TYPE_INVALID);
+    DBusMessage* reply = dbus_connection_send_with_reply_and_block(dwanfi->dbusConnection, msg, 2000, &err);  // Timeout 2 secondi
+    dbus_message_unref(msg);
+    if (dbus_error_is_set(&err)) {
+        dbus_error_free(&err);
+        if (reply) dbus_message_unref(reply);
+        return true; //I can't determinate if visible
+    }
+    if (!reply) {
+        return true; //I can't determinate if visible
+    }
+    DBusMessageIter args;
+    dbus_message_iter_init(reply, &args);
+    if (dbus_message_iter_get_arg_type(&args) != DBUS_TYPE_VARIANT) {
+        dbus_message_unref(reply);
+        return true; //I can't determinate if visible
+    }
+    DBusMessageIter variant;
+    dbus_message_iter_recurse(&args, &variant);
+    if (dbus_message_iter_get_arg_type(&variant) != DBUS_TYPE_ARRAY) {
+        std::cerr << "Variant non contiene un array" << std::endl;
+        dbus_message_unref(reply);
+        return true; //I can't determinate if visible
+    }
+    std::vector<std::string> registeredItems;
+    DBusMessageIter arrayItem;
+    dbus_message_iter_recurse(&variant, &arrayItem);
+    while (dbus_message_iter_get_arg_type(&arrayItem) == DBUS_TYPE_STRING) {
+        const char* item;
+        dbus_message_iter_get_basic(&arrayItem, &item);
+        registeredItems.push_back(item);
+        dbus_message_iter_next(&arrayItem);
+    }
+    dbus_message_unref(reply);
+    char* serviceName = wstringToUtf8(dwanfi->dbusServiceName);
+    string strServiceName = string(serviceName);
+    for (vector<string>::const_iterator it = registeredItems.begin();it != registeredItems.end();it++) {
+        if (*it == strServiceName) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void dbusRegisterTrayIconOnPendingCallNotify(DBusPendingCall* call, void* userData) {
+	DWANotifyIcon* dwanfi = static_cast<DWANotifyIcon*>(userData);
+	DBusMessage* reply = dbus_pending_call_steal_reply(call);
+	dbus_pending_call_unref(call);
+	if (reply) {
+		if (dbus_message_get_type(reply) == DBUS_MESSAGE_TYPE_ERROR) {
+			dwanfi->dbusIconTrayStatus=2;
+		}else{
+			dwanfi->dbusIconTrayStatus=1;
+		}
+		dbus_message_unref(reply);
+	}else{
+		dwanfi->dbusIconTrayStatus=2;
+	}
+}
+
+void dbusRegisterTrayIcon(DWANotifyIcon* dwanfi) {
+	dwanfi->dbusIconTrayStatus=0;
+	char* serviceName = wstringToUtf8(dwanfi->dbusServiceName);
+	DBusMessage* msg = dbus_message_new_method_call(
+		"org.kde.StatusNotifierWatcher",
+		"/StatusNotifierWatcher",
+		"org.kde.StatusNotifierWatcher",
+		"RegisterStatusNotifierItem"
+	);
+	dbus_message_append_args(msg, DBUS_TYPE_STRING, &serviceName, DBUS_TYPE_INVALID);
+	DBusPendingCall* pending = NULL;
+	if(!dbus_connection_send_with_reply(dwanfi->dbusConnection, msg, &pending, -1)){
+		dbus_message_unref(msg);
+		dwanfi->dbusIconTrayStatus=2;
+		return;
+	}
+	dbus_message_unref(msg);
+	if (pending) {
+		dbus_pending_call_set_notify(
+			pending,
+			dbusRegisterTrayIconOnPendingCallNotify,
+			dwanfi,
+			NULL
+		);
+	}
+}
+
+/*
+DBusHandlerResult dbusMessageHandler(DBusConnection* connection, DBusMessage* message, void* userData) {
+	if ((dbus_message_is_signal(message,"org.freedesktop.login1.Manage", "SessionUnlocked")) ||
+			(dbus_message_is_signal(message,"org.freedesktop.login1.Session", "Unlock")) ||
+			(dbus_message_is_signal(message,"org.gnome.SessionManager", "Unlock")) ||
+			(dbus_message_is_signal(message,"org.gnome.Mutter.DisplayConfig", "LockedChanged"))) {
+
+		DWANotifyIcon* ww = static_cast<DWANotifyIcon*>(userData);
+		dbusRegisterTrayIcon(ww);
+
+	}
+	return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+*/
+
+void* dbusThreadFunction(void* userData) {
+	DWANotifyIcon* dwanfi = static_cast<DWANotifyIcon*>(userData);
+
+	bool bokdbus=false;
+	int maxRetries=5;
+	for (int attempt=1; attempt <= maxRetries; attempt++) {
+		DBusError err;
+		dbus_error_init(&err);
+		dwanfi->dbusConnection = dbus_bus_get(DBUS_BUS_SESSION, &err);
+		if (dwanfi->dbusConnection && dbus_connection_get_is_connected(dwanfi->dbusConnection)) {
+			bokdbus=true;
+			break;
+		}
+		if (dbus_error_is_set(&err)) {
+			dbus_error_free(&err);
+		}
+		usleep(1000 * 1000);
+	}
+	if (!bokdbus){
+		fprintf(stderr, "Dbus connection error.\n");
+		return NULL;
+	}
+
+	char* serviceName = wstringToUtf8(dwanfi->dbusServiceName);
+	int ret = dbus_bus_request_name(dwanfi->dbusConnection, serviceName, 0, NULL);
+	if (ret != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER) {
+		dbus_connection_unref(dwanfi->dbusConnection);
+		return NULL;
+	}
+
+	DBusObjectPathVTable vtable;
+	vtable.unregister_function = NULL;
+	vtable.message_function = dbusMessageHandlerTrayIcon;
+	if (!dbus_connection_register_object_path(dwanfi->dbusConnection, "/StatusNotifierItem", &vtable, dwanfi)) {
+		dbus_connection_unref(dwanfi->dbusConnection);
+		return NULL;
+	}
+	DBusObjectPathVTable vtableMenu;
+	vtableMenu.unregister_function = NULL;
+	vtableMenu.message_function = dbusMessageHandlerTrayIcon;
+	if (!dbus_connection_register_object_path(dwanfi->dbusConnection,"/MenuBar",&vtableMenu,dwanfi)) {
+		dbus_connection_unref(dwanfi->dbusConnection);
+		return NULL;
+	}
+
+	/*
+	bool bokfilter=false;
+	DBusError err;
+	dbus_error_init(&err);
+	dbus_bus_add_match(dwanfi->dbusConnection,
+			"type='signal',"
+			"interface='org.freedesktop.login1.Manager',"
+			"member='SessionUnlocked'",
+			&err);
+	if (dbus_error_is_set(&err)) {
+		dbus_error_free(&err);
+	}else{
+		bokfilter=true;
+	}
+	if (!bokfilter){
+		dbus_error_init(&err);
+		dbus_bus_add_match(dwanfi->dbusConnection,
+			"type='signal',"
+			"interface='org.freedesktop.login1.Session',"
+			"member='Unlock'",
+			&err);
+		if (dbus_error_is_set(&err)) {
+			dbus_error_free(&err);
+		}else{
+			bokfilter=true;
+		}
+	}
+	if (!bokfilter){
+		dbus_error_init(&err);
+		dbus_bus_add_match(dwanfi->dbusConnection,
+			"type='signal',"
+			"interface='org.gnome.SessionManager',"
+			"member='Unlock'",
+			&err);
+		if (dbus_error_is_set(&err)) {
+			dbus_error_free(&err);
+		}else{
+			bokfilter=true;
+		}
+	}
+	if (!bokfilter){
+		dbus_error_init(&err);
+		dbus_bus_add_match(dwanfi->dbusConnection,
+			"type='signal',"
+			"interface='org.gnome.Mutter.DisplayConfig',"
+			"member='LockedChanged'",
+			&err);
+		if (dbus_error_is_set(&err)) {
+			dbus_error_free(&err);
+		}else{
+			bokfilter=true;
+		}
+	}
+	if (bokfilter){
+		dbus_connection_add_filter(dwanfi->dbusConnection, dbusMessageHandler, dwanfi, NULL);
+	}
+	*/
+
+	dbusRegisterTrayIcon(dwanfi);
+	time_t lastCheck = time(NULL);
+	dwanfi->dbusRunning = true;
+	while (dwanfi->dbusRunning) {
+		dbus_connection_read_write_dispatch(dwanfi->dbusConnection, 1000);
+		if (dwanfi->dbusIconTrayStatus==1){
+			if (dwanfi->dbusIconUpdated){
+				dwanfi->dbusIconUpdated=false;
+				dbusNotifyNewIcon(dwanfi->dbusConnection);
+			}
+		}
+		time_t now = time(NULL);
+		if (difftime(now, lastCheck) >= 5.0) {
+			if (!dbusIsRegisterTrayIcon(dwanfi)){
+				dbusRegisterTrayIcon(dwanfi);
+			}
+			lastCheck = now;
+		}
+
+	}
+	dbus_connection_unref(dwanfi->dbusConnection);
+	return NULL;
+}
+
+
 void removeWindowByHandle(Window win){
 	for (unsigned int i=0;i<windowList.size();i++){
 		DWAWindow* app = windowList.at(i);
@@ -133,7 +951,6 @@ DWAWindow* getWindowByHandle(Window win){
 	}
 	return NULL;
 }
-
 
 DWAWindow* getWindowByID(int id){
 	if (windowList.size()==0){
@@ -383,7 +1200,6 @@ bool loadFontType1(DWAFont* dwf, wchar_t* name){
 	return true;
 }
 
-
 bool loadFontType0(DWAFont* dwf,wchar_t* name){
 	dwf->type=0;
 	int nmissing;
@@ -454,6 +1270,10 @@ void DWAGDINewWindow(int id,int tp, int x, int y, int w, int h, wchar_t* iconPat
 	int depth  = DefaultDepth(display,screenid);
 	appwin = XCreateWindow(display,root,x, y, w, h, 0,depth,InputOutput,visual,CWBackPixel,&attributes);
 
+	XClassHint class_hint;
+	class_hint.res_name = const_cast<char*>("dwagent_instance");
+	class_hint.res_class = const_cast<char*>("DWAgent");
+	XSetClassHint(display, appwin, &class_hint);
 
 	//PREVENT CLOSE BY X BUTTON
     XSetWMProtocols(display, appwin, &wm_delete_window, 1);
@@ -889,91 +1709,108 @@ wchar_t* DWAGDIGetClipboardText(){
 
 void DWAGDICreateNotifyIcon(int id, wchar_t* iconPath, wchar_t* toolTip){
 	DWANotifyIcon* dwanfi=addNotifyIcon(id);
-
-	XVisualInfo vinfo;
-	if (XMatchVisualInfo(display, screenid, 32, TrueColor, &vinfo)){
-		XSetWindowAttributes attributes;
-		attributes.colormap = XCreateColormap(display, root, vinfo.visual, AllocNone);
-		attributes.border_pixel = 0;
-		attributes.background_pixel = 0;
-		dwanfi->win = XCreateWindow(display,root, -24, -24, 24, 24, 0,
-								vinfo.depth,
-								InputOutput,
-								vinfo.visual,
-								CWColormap | CWBorderPixel | CWBackPixel,
-								&attributes);
+	dwanfi->dbusSNI=isWayland();
+	if (dwanfi->dbusSNI) {
+		dwanfi->dbusRunning = false;
+		dwanfi->dbusServiceName = L"net.dwservice.DWAgent";
+		dwanfi->dbusAppid = L"dwagent";
+		dwanfi->dbusTitle = L"Agent";
+		dwanfi->iconPath = wstring(iconPath);
+		dwanfi->dbusIconUpdated = false;
+		if (pthread_create(&dwanfi->dbusThread, NULL, dbusThreadFunction, dwanfi) != 0) {
+			dwanfi->dbusRunning = false;
+		}
 	}else{
-		XSetWindowAttributes attrs;
-		attrs.background_pixel = 0x000000;
-		attrs.event_mask = ButtonPressMask | ExposureMask;
-		attrs.override_redirect = True;
-		dwanfi->win = XCreateWindow(display,root,-24, -24, 24, 24, 0,
-								DefaultDepth(display, screenid),
-								InputOutput,
-								DefaultVisual(display, screenid),
-								CWBackPixel | CWEventMask | CWOverrideRedirect ,
-								&attrs);
+		XVisualInfo vinfo;
+		if (XMatchVisualInfo(display, screenid, 32, TrueColor, &vinfo)){
+			XSetWindowAttributes attributes;
+			attributes.colormap = XCreateColormap(display, root, vinfo.visual, AllocNone);
+			attributes.border_pixel = 0;
+			attributes.background_pixel = 0;
+			dwanfi->win = XCreateWindow(display,root, -24, -24, 24, 24, 0,
+									vinfo.depth,
+									InputOutput,
+									vinfo.visual,
+									CWColormap | CWBorderPixel | CWBackPixel,
+									&attributes);
+		}else{
+			XSetWindowAttributes attrs;
+			attrs.background_pixel = 0x000000;
+			attrs.event_mask = ButtonPressMask | ExposureMask;
+			attrs.override_redirect = True;
+			dwanfi->win = XCreateWindow(display,root,-24, -24, 24, 24, 0,
+									DefaultDepth(display, screenid),
+									InputOutput,
+									DefaultVisual(display, screenid),
+									CWBackPixel | CWEventMask | CWOverrideRedirect ,
+									&attrs);
+		}
+
+
+		dwanfi->gc = XCreateGC(display, dwanfi->win, 0, 0);
+		XSizeHints *sh = XAllocSizeHints();
+		sh->flags = PPosition | PSize | PMinSize;
+		sh->min_width = 24;
+		sh->min_height = 24;
+		XSetWMNormalHints(display, dwanfi->win, sh);
+		XFree(sh);
+
+		Atom atomInfo = XInternAtom(display, "_XEMBED_INFO", False);
+		unsigned long xembedInfo[2];
+		xembedInfo[0] = 0;
+		xembedInfo[1] = 1;
+		XChangeProperty(display, dwanfi->win, atomInfo, atomInfo, 32, PropModeReplace, (unsigned char*)xembedInfo, 2);
+		XSelectInput (display, dwanfi->win, ExposureMask | PointerMotionMask | StructureNotifyMask
+						| ButtonPressMask | ButtonReleaseMask | FocusChangeMask);
+
+		char atomtn[128];
+		sprintf(atomtn, "_NET_SYSTEM_TRAY_S%i", screenid);
+		Atom satom = XInternAtom(display, atomtn, False);
+		Window wtray = XGetSelectionOwner(display, satom);
+		if (wtray != None){
+			XSelectInput(display, wtray ,StructureNotifyMask);
+		}
+		XTextProperty prop;
+		XwcTextListToTextProperty(display, &toolTip, 1, XUTF8StringStyle, &prop);
+		XSetWMName(display, dwanfi->win, &prop);
+		dwanfi->iconPath=wstring(iconPath);
+		XEvent ev;
+		memset(&ev, 0, sizeof(ev));
+		ev.xclient.type = ClientMessage;
+		ev.xclient.window = wtray;
+		ev.xclient.message_type = XInternAtom(display, "_NET_SYSTEM_TRAY_OPCODE", False);
+		ev.xclient.format = 32;
+		ev.xclient.data.l[0] = CurrentTime;
+		ev.xclient.data.l[1] = SYSTEM_TRAY_REQUEST_DOCK;
+		ev.xclient.data.l[2] = dwanfi->win;
+		ev.xclient.data.l[3] = 0;
+		ev.xclient.data.l[4] = 0;
+		XSendEvent(display, wtray, False, NoEventMask, &ev);
 	}
-
-
-	dwanfi->gc = XCreateGC(display, dwanfi->win, 0, 0);
-	XSizeHints *sh = XAllocSizeHints();
-	sh->flags = PPosition | PSize | PMinSize;
-	sh->min_width = 24;
-	sh->min_height = 24;
-	XSetWMNormalHints(display, dwanfi->win, sh);
-	XFree(sh);
-
-	Atom atomInfo = XInternAtom(display, "_XEMBED_INFO", False);
-	unsigned long xembedInfo[2];
-	xembedInfo[0] = 0;
-	xembedInfo[1] = 1;
-	XChangeProperty(display, dwanfi->win, atomInfo, atomInfo, 32, PropModeReplace, (unsigned char*)xembedInfo, 2);
-	XSelectInput (display, dwanfi->win, ExposureMask | PointerMotionMask | StructureNotifyMask
-					| ButtonPressMask | ButtonReleaseMask | FocusChangeMask);
-
-	char atomtn[128];
-	sprintf(atomtn, "_NET_SYSTEM_TRAY_S%i", screenid);
-	Atom satom = XInternAtom(display, atomtn, False);
-	Window wtray = XGetSelectionOwner(display, satom);
-	if (wtray != None){
-		XSelectInput(display, wtray ,StructureNotifyMask);
-	}
-	XTextProperty prop;
-	XwcTextListToTextProperty(display, &toolTip, 1, XUTF8StringStyle, &prop);
-	XSetWMName(display, dwanfi->win, &prop);
-	dwanfi->iconPath=wstring(iconPath);
-	XEvent ev;
-	memset(&ev, 0, sizeof(ev));
-	ev.xclient.type = ClientMessage;
-	ev.xclient.window = wtray;
-	ev.xclient.message_type = XInternAtom(display, "_NET_SYSTEM_TRAY_OPCODE", False);
-	ev.xclient.format = 32;
-	ev.xclient.data.l[0] = CurrentTime;
-	ev.xclient.data.l[1] = SYSTEM_TRAY_REQUEST_DOCK;
-	ev.xclient.data.l[2] = dwanfi->win;
-	ev.xclient.data.l[3] = 0;
-	ev.xclient.data.l[4] = 0;
-	XSendEvent(display, wtray, False, NoEventMask, &ev);
 }
 
 void DWAGDIUpdateNotifyIcon(int id,wchar_t* iconPath,wchar_t* toolTip){
 	DWANotifyIcon* dwanfi = getNotifyIconByID(id);
 	if (dwanfi!=NULL){
-		XTextProperty prop;
-		XwcTextListToTextProperty(display, &toolTip, 1, XUTF8StringStyle, &prop);
-		XSetWMName(display, dwanfi->win, &prop);
-		dwanfi->iconPath=wstring(iconPath);
-		if ((dwanfi->w>0) and (dwanfi->h>0)){
-			XEvent exppp;
-			memset(&exppp, 0, sizeof(exppp));
-			exppp.type = Expose;
-			exppp.xexpose.window = dwanfi->win;
-			exppp.xexpose.x=0;
-			exppp.xexpose.y=0;
-			exppp.xexpose.width=dwanfi->w;
-			exppp.xexpose.height=dwanfi->h;
-			XSendEvent(display,dwanfi->win,False,ExposureMask,&exppp);
+		if (dwanfi->dbusSNI) {
+			dwanfi->iconPath=wstring(iconPath);
+			dwanfi->dbusIconUpdated=true;
+		}else{
+			XTextProperty prop;
+			XwcTextListToTextProperty(display, &toolTip, 1, XUTF8StringStyle, &prop);
+			XSetWMName(display, dwanfi->win, &prop);
+			dwanfi->iconPath=wstring(iconPath);
+			if ((dwanfi->w>0) and (dwanfi->h>0)){
+				XEvent exppp;
+				memset(&exppp, 0, sizeof(exppp));
+				exppp.type = Expose;
+				exppp.xexpose.window = dwanfi->win;
+				exppp.xexpose.x=0;
+				exppp.xexpose.y=0;
+				exppp.xexpose.width=dwanfi->w;
+				exppp.xexpose.height=dwanfi->h;
+				XSendEvent(display,dwanfi->win,False,ExposureMask,&exppp);
+			}
 		}
 	}
 }
@@ -981,11 +1818,21 @@ void DWAGDIUpdateNotifyIcon(int id,wchar_t* iconPath,wchar_t* toolTip){
 void DWAGDIDestroyNotifyIcon(int id){
 	DWANotifyIcon* dwanfi = getNotifyIconByID(id);
 	if (dwanfi!=NULL){
-		XDestroyWindow(display,dwanfi->win);
-		dwanfi->win=0;
-		dwanfi->gc=NULL;
-		dwanfi->w=0;
-		dwanfi->h=0;
+		if (dwanfi->dbusSNI) {
+			if (dwanfi->dbusRunning){
+				dwanfi->dbusRunning=false;
+				void *result;
+				if (timedJoin(dwanfi->dbusThread, &result, 3000) == 1) {
+					pthread_cancel(dwanfi->dbusThread);
+				}
+			}
+		}else{
+			XDestroyWindow(display,dwanfi->win);
+			dwanfi->win=0;
+			dwanfi->gc=NULL;
+			dwanfi->w=0;
+			dwanfi->h=0;
+		}
 		dwanfi->iconPath=wstring();
 	}
 }
@@ -1164,7 +2011,7 @@ void DWAGDILoop(CallbackEventMessage callback){
 	g_callEventMessage=callback;
 	setlocale(LC_ALL, getenv("LANG"));
 	display = XOpenDisplay(NULL);
-	if (! display) {
+	if (!display) {
 		fprintf(stderr, "Could not open display.\n");
 	}
 
@@ -1176,8 +2023,18 @@ void DWAGDILoop(CallbackEventMessage callback){
 	root = RootWindow(display, screenid);
 	screen = XScreenOfDisplay(display, screenid);
 
-	if ((im = XOpenIM(display, NULL, NULL, NULL)) == NULL) {
-		fprintf(stderr, "Couldn't open input method");
+	int maxRetries=5;
+	for (int attempt = 1; attempt <= maxRetries; attempt++) {
+		im = XOpenIM(display, NULL, NULL, NULL);
+		if (im) {
+			break;
+		}
+		usleep(1000 * 1000);
+
+		fprintf(stderr, "XOpenIM other ATTEMPT\n");
+	}
+	if (!im) {
+		fprintf(stderr, "Couldn't open input method (XOpenIM).");
 	}
 	XIMStyles *im_supported_styles;
 	XIMStyle app_supported_styles;
@@ -1382,6 +2239,9 @@ void DWAGDILoop(CallbackEventMessage callback){
 	charToFontHash.clear();
 	hashToFont.clear();
 	XFreeColormap(display, colormap);
+	if (im) {
+		XCloseIM(im);
+	}
 	XCloseDisplay(display);
 }
 

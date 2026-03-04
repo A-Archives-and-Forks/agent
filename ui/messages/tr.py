@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Girilen kod geçeriz',
     'errorInvalidUserPassword':u'Geçersiz kullanıcı veya şifre',
     'fieldRequired':u'Bu Alan \'{0}\' Gereklidir.',
+    'groupName':u'Grup ismi',
     'install':u'Kur',
     'installMonitor':u'Ekran Kuruluyor...',
     'installMonitorErr':u'Ekran yüklemesi başarısız oldu.',

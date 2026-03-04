@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Le code saisi est incorrect.',
     'errorInvalidUserPassword':u'Nom d\'utilisateur ou mot de passe incorrect.',
     'fieldRequired':u'Le champ \'{0}\' est obligatoire.',
+    'groupName':u'Nom du groupe',
     'install':u'Installer',
     'installMonitor':u'Installation du moniteur...',
     'installMonitorErr':u'L\'installation du moniteur a échoué.',

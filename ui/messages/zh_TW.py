@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'輸入的碼無效。',
     'errorInvalidUserPassword':u'無效的使用者或密碼。',
     'fieldRequired':u'欄位「{0}」是必要項目。',
+    'groupName':u'群組名稱',
     'install':u'安裝',
     'installMonitor':u'安裝監控器…',
     'installMonitorErr':u'安裝監控器失敗。',

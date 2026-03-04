@@ -84,6 +84,7 @@ data={
     'errorInvalidCode':u'Der eingegebene Code ist ungültig.',
     'errorInvalidUserPassword':u'Benutzername oder Passwort ungültig.',
     'fieldRequired':u'Das Feld \'{0}\' ist erforderlich.',
+    'groupName':u'Gruppenname',
     'install':u'Installieren',
     'installMonitor':u'Installiere Monitor...',
     'installMonitorErr':u'Installation des Monitors fehlgeschlagen.',
