@@ -2177,7 +2177,8 @@ class ProcessInActiveConsole(Process):
         except:
             None            
         
-        if bwaylandok or (("XDG_SESSION_TYPE" in lstret) and (lstret["XDG_SESSION_TYPE"].upper()=="WAYLAND")):            
+        if bwaylandok or (("XDG_SESSION_TYPE" in lstret) and (lstret["XDG_SESSION_TYPE"].upper()=="WAYLAND")):
+            '''            
             unm=""
             try:
                 if uid>0:
@@ -2187,6 +2188,7 @@ class ProcessInActiveConsole(Process):
                 None
             if uid<=0 or unm=="gdm" or unm=="sddm" or unm=="lightdm" or unm=="xdm": #LOGIN MANAGER
                 raise Exception("Capturing the login manager screen is not allowed under Wayland.")
+            '''
             if "XDG_SESSION_TYPE" not in lstret or lstret["XDG_SESSION_TYPE"].upper()!="WAYLAND":
                 lstret["XDG_SESSION_TYPE"]="wayland"
             if "DISPLAY" not in lstret:

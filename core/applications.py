@@ -16,7 +16,7 @@ def get_supported(agt):
     arSupportedApplications.append("logwatch")
     arSupportedApplications.append("resource")
     arSupportedApplications.append("desktop")
-    if utils.is_linux() or utils.is_mac() or (utils.is_windows() and platform.release() == '10'):
+    if utils.is_linux() or utils.is_mac() or (utils.is_windows() and (platform.release() == '10' or platform.release() == '11')):
         arSupportedApplications.append("shell")
     return arSupportedApplications
         

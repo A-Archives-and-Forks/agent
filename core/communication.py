@@ -1435,6 +1435,7 @@ class HttpDownload(threading.Thread):
             self._close=True
             self._http_request.disconnect()
             if fl is not None:
+                utils.file_sync(fl)
                 fl.close()
             if self._bcomplete:
                 self.fire_complete()

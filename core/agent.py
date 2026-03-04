@@ -103,7 +103,7 @@ def read_json_file(nm):
             e = utils.get_exception()
             raise Exception("Error parse " + nm +" file: " + utils.exception_to_string(e))
         finally:
-            f.close()
+            f.close()        
     except:
         e = utils.get_exception()
         if utils.path_exists(nm+".bk"):
@@ -119,16 +119,17 @@ def read_json_file(nm):
                 raise e
         else:
             raise e
+    if utils.path_exists(nm+".bk"):
+        utils.path_remove(nm+".bk")
     return c
 
 def write_json_file(nm,jo):
     s = json.dumps(jo, sort_keys=True, indent=1)
-    if utils.path_exists(nm+".bk"):
-        utils.path_remove(nm+".bk")
-    if utils.path_exists(nm):
+    if utils.path_exists(nm) and not utils.path_exists(nm+".bk"):
         utils.path_copy(nm, nm+".bk")
     f = utils.file_open(nm, 'wb')
     f.write(utils.str_to_bytes(s,"utf8"))
+    utils.file_sync(f)
     f.close()
     if utils.path_exists(nm+".bk"):
         utils.path_remove(nm+".bk")
@@ -149,6 +150,8 @@ class Agent():
         #Create log
         self._noctrlfile=False
         self._bstop=False
+        self._truncate_service_log_enable=True
+        self._truncate_service_log_counter=utils.Counter(10) #10 seconds        
         self._runonfly=False
         self._runonfly_conn_retry=0
         self._runonfly_user=None
@@ -725,6 +728,7 @@ class Agent():
                         raise Exception("Cannot remove file " + npath + ".")
                 fd = utils.file_open(npath,"wb")
                 fd.write(zfile.read(nm))
+                utils.file_sync(fd)
                 fd.close()
         finally:
             zfile.close()
@@ -996,6 +1000,7 @@ class Agent():
                         s = json.dumps(jonewver, sort_keys=True, indent=1)
                         f = utils.file_open("updateTMP" + utils.path_sep + "versions.json", "wb")
                         f.write(utils.str_to_bytes(s,"utf8"))
+                        utils.file_sync(f)
                         f.close()
                         shutil.move("updateTMP", "update")
                         self._update_ready_reboot=True
@@ -1507,6 +1512,7 @@ class Agent():
                 return ret
             return self._brun
         else:
+            self._truncate_service_log()
             if self._noctrlfile==True:
                 return not self._bstop
             else:
@@ -1516,7 +1522,22 @@ class Agent():
                     if not self._check_pid(self._svcpid):
                         return False
                 return self._brun
-
+    
+    def _truncate_service_log(self):
+        try:
+            if self._truncate_service_log_enable==True:
+                if self._truncate_service_log_counter.is_elapsed():
+                    self._truncate_service_log_counter.reset()
+                    pthslg="native" + utils.path_sep + "service.log"
+                    if utils.path_exists(pthslg):
+                        sz=utils.path_size(pthslg)
+                        if sz>=1*1024*1024:
+                            with open(pthslg, "r+") as f:
+                                f.truncate(0)
+        except:
+            self._truncate_service_log_enable=False
+        
+    
     def destroy(self):
         self._brun=False
     
@@ -1812,7 +1833,6 @@ class Agent():
                     self._update_app_dependencies(name)
                 elif tp=="lib":
                     self._update_lib_dependencies(name)
-
             else:
                 None #OS not needs of this lib or app
         except:
@@ -2524,7 +2544,7 @@ class Message():
                 print(e)
                 if not self._conn.wait_recovery():
                     raise e
-           
+    
     def send_response(self,msg,resp):
         m = {
                 'name': 'response', 
@@ -2860,22 +2880,42 @@ class Session(Message):
             if 'requestKey' in msg:
                 self.send_response_error(msg,e.__class__.__name__ ,utils.exception_to_string(e))
             
+    def _load_app(self, msg):
+        resp = ""
+        try:
+            app_name = msg["parameter_name"]
+            self._agent.get_app(app_name)
+            resp = "K:null"
+        except:
+            e = utils.get_exception()
+            m = utils.exception_to_string(e)
+            self._agent.write_err(m)
+            resp=  ":".join(["E", m])
+        return resp
+    
     def _request(self, msg):
         resp = ""
         try:
             app_name = msg["module"]
             cmd_name = msg["command"]
-            params = {}
-            params["requestKey"]=msg['requestKey']
-            sck = "parameter_"
-            for key in msg:
-                if key.startswith(sck):
-                    params[key[len(sck):]]=msg[key]
-            resp=self._agent.invoke_app(app_name, cmd_name, self, params)
-            if resp is not None:
-                resp = ":".join(["K", resp])
+            if app_name=="core":
+                if cmd_name=="load_app":
+                    return self._load_app(msg)
+                else:
+                    raise Exception('Command ' + cmd_name + ' not found in core.')
             else:
-                resp = "K:null"
+                cmd_name = msg["command"]
+                params = {}
+                params["requestKey"]=msg['requestKey']
+                sck = "parameter_"
+                for key in msg:
+                    if key.startswith(sck):
+                        params[key[len(sck):]]=msg[key]
+                resp=self._agent.invoke_app(app_name, cmd_name, self, params)
+                if resp is not None:
+                    resp = ":".join(["K", resp])
+                else:
+                    resp = "K:null"
         except:
             e = utils.get_exception()
             m = utils.exception_to_string(e)
@@ -3836,6 +3876,7 @@ class UploadOLD():
                         self._enddatafile=True
                         #SCRIVE FILE
                         try:
+                            utils.file_sync(self._fltmp)
                             self._fltmp.close()
                             if utils.path_exists(self._path):
                                 if utils.path_isdir(self._path):

@@ -321,6 +321,11 @@ else:
     def file_open(filename, mode='r', encoding=None, errors='strict', buffering=-1):
         return codecs.open(_path_fix(filename), mode, encoding, errors, buffering)
 
+def file_sync(f):
+    f.flush()
+    if hasattr(os, "fsync"):
+        os.fsync(f.fileno())
+
 ##########
 # SYSTEM #
 ##########
@@ -398,9 +403,9 @@ class Logger():
     def __init__(self, conf):
         self._logger = logging.getLogger()
         if "filename" in conf:
-            hdlr = logging.handlers.RotatingFileHandler(conf["filename"], "a", 1000000, 3)
+            hdlr = logging.handlers.RotatingFileHandler(conf["filename"], "a", 1*1024*1024, 3)
         else:
-            hdlr = logging.StreamHandler()
+            hdlr = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
         hdlr.setFormatter(formatter)
         self._logger.addHandler(hdlr) 
