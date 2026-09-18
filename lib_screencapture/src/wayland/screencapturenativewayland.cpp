@@ -881,7 +881,6 @@ void dbusHandleClipboardSelectionOwnerChanged(DBusConnection* connection, DBusMe
 						while ((currentTypeArr = dbus_message_iter_get_arg_type(&array_mime_iter)) != DBUS_TYPE_INVALID) {
 							if (currentTypeArr==DBUS_TYPE_STRING){
 								dbus_message_iter_get_basic(&array_mime_iter, &mime_str);
-								//std::cerr << "mime_str: " << mime_str << std::endl;
 								if ((mime_str!=NULL) && ((strcmp(mime_str,"text/plain;charset=utf-8")==0) || (strcmp(mime_str,"UTF8_STRING")==0))){
 									mimetypeok=true;
 									break;
@@ -892,12 +891,26 @@ void dbusHandleClipboardSelectionOwnerChanged(DBusConnection* connection, DBusMe
 					}
 					dbus_message_iter_next(&struct_iter);
 				}
+			}else if (dbus_message_iter_get_arg_type(&variant_iter) == DBUS_TYPE_ARRAY) {
+				DBusMessageIter array_mime_iter;
+				dbus_message_iter_recurse(&variant_iter, &array_mime_iter);
+				int currentTypeArr;
+				const char *mime_str;
+				while ((currentTypeArr = dbus_message_iter_get_arg_type(&array_mime_iter)) != DBUS_TYPE_INVALID) {
+					if (currentTypeArr==DBUS_TYPE_STRING){
+						dbus_message_iter_get_basic(&array_mime_iter, &mime_str);
+						if ((mime_str!=NULL) && ((strcmp(mime_str,"text/plain;charset=utf-8")==0) || (strcmp(mime_str,"UTF8_STRING")==0))){
+							mimetypeok=true;
+							break;
+						}
+					}
+					dbus_message_iter_next(&array_mime_iter);
+				}
 			}
 		}else if (strcmp(key, "session_is_owner") == 0) {
 			dbus_message_iter_recurse(&dict_entry_iter, &variant_iter);
 			if (dbus_message_iter_get_arg_type(&variant_iter) == DBUS_TYPE_BOOLEAN) {
 				dbus_message_iter_get_basic(&variant_iter, &sesisowner);
-				//std::cerr << "session_is_owner: " << sesisowner << std::endl;
 			}
 		}
 		dbus_message_iter_next(&array_iter);
@@ -1523,7 +1536,7 @@ void pwStreamDestroyMonitors(){
 }
 
 static const struct pw_registry_events RegistryEvents = {
-    PW_VERSION_REGISTRY_EVENTS,
+	.version = PW_VERSION_REGISTRY_EVENTS,
     .global = onRegistryGlobal,
     .global_remove = onRegistryGlobalRemove,
 };
@@ -2158,6 +2171,7 @@ void DWAScreenCapturePaste(){
 }
 
 void DWAScreenCaptureGetClipboardChanges(CLIPBOARD_DATA* clipboardData){
+
 	clipboardData->type=0;
 	bool bchange=false;
 	tdlock.lock();

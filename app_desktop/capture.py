@@ -58,12 +58,23 @@ class ProcessCaptureScreen(threading.Thread):
         self._clipboard_data=common.CLIPBOARD_DATA()
         self._clipboard_hash=""
     
+    def _is_windows_10_or_later(self):
+        try:
+            return utils.is_windows_10_or_later()
+        except:
+            #2026 07 22 TO REMOVE
+            try:            
+                win = sys.getwindowsversion()
+                return win.major == 10
+            except:
+                return platform.release() == '10' or platform.release() == '11'
+    
     def _load_screen_module(self):
         if self._screen_module is None:
             loadseq=[]
             if agent.is_windows():
                 if self._process._force_capturescreenlib is None:
-                    if platform.release() == '10' or platform.release() == '11':
+                    if self._is_windows_10_or_later():
                         loadseq.append("dwagscreencapturedesktopduplication.dll")
                     loadseq.append("dwagscreencapturebitblt.dll")
                 else:

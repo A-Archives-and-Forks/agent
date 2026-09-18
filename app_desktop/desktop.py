@@ -713,6 +713,8 @@ class DesktopSession(threading.Thread):
                     elif not b and self._send_stats_thread is not None:
                         self._send_stats_thread=None
                 if prprequest is not None and "getClipboardData" in prprequest:
+                    if not self._allow_inputs:
+                        raise Exception("Permission denied (inputs).")
                     self._clipboard_data_condition.acquire()
                     try:
                         self._get_clipboard_data=prprequest["getClipboardData"]
@@ -720,6 +722,8 @@ class DesktopSession(threading.Thread):
                     finally:
                         self._clipboard_data_condition.release()
                 if prprequest is not None and "setClipboardData" in prprequest:
+                    if not self._allow_inputs:
+                        raise Exception("Permission denied (inputs).")
                     idx=prprequest["setClipboardData"]
                     if idx==0:
                         self._set_clipboard_data_tokens=[]
